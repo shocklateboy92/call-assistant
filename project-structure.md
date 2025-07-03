@@ -12,10 +12,10 @@ call-assistant/
 │   └── orchestrator/           # Main Go orchestrator binary
 │       └── main.go
 ├── internal/                   # Private orchestrator code
-│   ├── discovery/              # Module discovery and management
-│   ├── lifecycle/              # Module process lifecycle
-│   ├── pipeline/               # Pipeline/graph management
-│   └── grpc/                   # gRPC server implementation
+│   ├── discovery.go            # Module discovery and management
+│   ├── lifecycle.go            # Module process lifecycle
+│   ├── pipeline.go             # Pipeline/graph management
+│   └── grpc.go                 # gRPC server implementation
 ├── pkg/                        # Reusable Go packages
 │   ├── proto/                  # Go protobuf client wrappers
 │   └── config/                 # Configuration utilities
@@ -41,6 +41,8 @@ call-assistant/
 │   ├── go/
 │   ├── typescript/
 │   └── python/
+│       ├── pyproject.toml     # Package config for editable install
+│       └── __init__.py        # Makes it a proper Python package
 ├── configs/                    # Configuration files
 │   ├── orchestrator.yaml
 │   └── modules/
@@ -67,10 +69,10 @@ call-assistant/
 - Follows the standard Go project layout convention
 
 **`internal/`**: Private orchestrator code, organized by responsibility
-- `discovery/`: Module discovery and registration logic
-- `lifecycle/`: Process management and monitoring
-- `pipeline/`: Graph-based pipeline orchestration
-- `grpc/`: gRPC server and service implementations
+- `discovery.go`: Module discovery and registration logic
+- `lifecycle.go`: Process management and monitoring
+- `pipeline.go`: Graph-based pipeline orchestration
+- `grpc.go`: gRPC server and service implementations
 
 **`pkg/`**: Reusable packages that could be imported by modules
 - `proto/`: Go client wrappers for protobuf services
@@ -107,6 +109,7 @@ call-assistant/
 **Language-specific generation**: Each language gets its own `generated/` subdirectory
 - Prevents language-specific artifacts from polluting other language directories
 - Allows for language-specific build optimizations
+- Python generated code is packaged for editable installation
 - Simplifies CI/CD pipeline configuration
 
 **Clean separation**: Generated code never mixed with hand-written code
@@ -192,8 +195,9 @@ cd modules/go2rtc && go build -o ../../bin/go2rtc-module
 # Install Node.js dependencies for TypeScript modules
 cd modules/matrix && npm install && npm run build
 
-# Install Python dependencies
+# Install Python dependencies and generated gRPC package
 cd modules/chromecast && pip install -r requirements.txt
+pip install -e ../../generated/python
 ```
 
 ## Benefits
