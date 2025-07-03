@@ -1,0 +1,96 @@
+server_name: "localhost"
+pid_file: /data/homeserver.pid
+web_client_location: https://app.element.io/
+public_baseurl: http://localhost:8008/
+
+listeners:
+  - port: 8008
+    tls: false
+    type: http
+    x_forwarded: true
+    resources:
+      - names: [client, federation]
+        compress: false
+
+database:
+  name: sqlite3
+  args:
+    database: /data/homeserver.db
+
+log_config: "/data/localhost.log.config"
+media_store_path: /data/media_store
+registration_shared_secret: "test_secret_for_development"
+report_stats: false
+macaroon_secret_key: "test_macaroon_secret_for_development"
+form_secret: "test_form_secret_for_development"
+signing_key_path: "/data/localhost.signing.key"
+
+trusted_key_servers:
+  - server_name: "matrix.org"
+
+# Allow registration without email verification for testing
+enable_registration: true
+enable_registration_without_verification: true
+
+# TURN server configuration
+turn_uris:
+  - "turn:localhost:3478?transport=udp"
+  - "turn:localhost:3478?transport=tcp"
+turn_shared_secret: "coturn_shared_secret"
+turn_user_lifetime: 86400000
+turn_allow_guests: true
+
+# Suppress key server verification warnings for testing
+suppress_key_server_warning: true
+
+# Allow guests to join rooms
+allow_guest_access: true
+
+# WebRTC configuration for video calls
+experimental_features:
+  msc3874_enabled: true
+  msc3886_enabled: true
+
+# Disable rate limiting for development/testing
+rc_message:
+  per_second: 1000
+  burst_count: 10000
+
+rc_registration:
+  per_second: 1000
+  burst_count: 10000
+
+rc_login:
+  address:
+    per_second: 1000
+    burst_count: 10000
+  account:
+    per_second: 1000
+    burst_count: 10000
+  failed_attempts:
+    per_second: 1000
+    burst_count: 10000
+
+rc_admin_redaction:
+  per_second: 1000
+  burst_count: 10000
+
+rc_joins:
+  local:
+    per_second: 1000
+    burst_count: 10000
+  remote:
+    per_second: 1000
+    burst_count: 10000
+
+rc_3pid_validation:
+  per_second: 1000
+  burst_count: 10000
+
+rc_invites:
+  per_room:
+    per_second: 1000
+    burst_count: 10000
+  per_user:
+    per_second: 1000
+    burst_count: 10000

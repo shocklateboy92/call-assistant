@@ -1,0 +1,82 @@
+# NOTE: Don't expose ports to the host machine in this file.
+# That will prevent the devcontainer from being instantiated
+# more than once.
+# Instead, add them to the `forwardPorts` section of devcontainer.json
+
+services:
+  devcontainer:
+    image: mcr.microsoft.com/devcontainers/base:ubuntu
+    volumes:
+      - .:/workspaces/universal:cached
+      - /var/run/docker.sock:/var/run/docker-host.sock
+      - ./runtime/claude-state:/home/vscode/.claude
+      # Git config was not getting copied automatically for some reason
+      - ~/.gitconfig:/home/vscode/.gitconfig:readonly
+    command: sleep infinity
+    environment:
+      - DOCKER_HOST=unix:///var/run/docker-host.sock
+
+  # No integration for now - will re-add in the future
+  # homeassistant:
+  #   image: homeassistant/home-assistant:stable
+  #   volumes:
+  #     - ./call_assist/integration:/config/custom_components/call_assist
+  #     - ./runtime/ha_config:/config
+  #   environment:
+  #     - TZ=UTC
+  #   restart: unless-stopped
+
+  synapse:
+    image: matrixdotorg/synapse:latest
+    volumes:
+      - ./runtime/synapse_data:/data
+      - ./config/synapse/homeserver.yaml:/data/homeserver.yaml
+    environment:
+      - SYNAPSE_SERVER_NAME=localhost
+      - SYNAPSE_REPORT_STATS=no
+      - UID=0
+      - GID=0
+    depends_on:
+      - coturn
+    restart: unless-stopped
+
+  coturn:
+    image: coturn/coturn:latest
+    volumes:
+      - ./config/coturn/turnserver.conf:/etc/coturn/turnserver.conf
+    command: ["-c", "/etc/coturn/turnserver.conf"]
+    restart: unless-stopped
+
+  rtsp-server:
+    image: bluenviron/mediamtx:latest
+    restart: unless-stopped
+    environment:
+      - MTX_PROTOCOLS=tcp
+    healthcheck:
+      test: ["CMD-SHELL", "timeout 1 /bin/echo > /dev/tcp/localhost/8554 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  test-stream-generator:
+    image: jrottenberg/ffmpeg:6.1-alpine
+    depends_on:
+      - rtsp-server
+    command: >
+      -re -f lavfi -i smptebars=size=640x480:rate=10:duration=86400
+      -f lavfi -i sine=frequency=1000:duration=86400
+      -c:v libx264 -preset ultrafast -tune zerolatency -g 30
+      -c:a aac -f rtsp rtsp://rtsp-server:8554/test_camera_1
+    restart: unless-stopped
+
+  test-stream-generator-2:
+    image: jrottenberg/ffmpeg:6.1-alpine
+    depends_on:
+      - rtsp-server
+    command: >
+      -re -f lavfi -i testsrc=size=640x480:rate=10:duration=86400
+      -f lavfi -i sine=frequency=440:duration=86400
+      -c:v libx264 -preset ultrafast -g 30 -c:a aac
+      -f rtsp rtsp://rtsp-server:8554/test_camera_2
+    restart: unless-stopped
+
