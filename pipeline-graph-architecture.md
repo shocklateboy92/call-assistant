@@ -283,31 +283,3 @@ call_assistant:
         converters: ["go2rtc"]
         auto_quality: true
 ```
-
-## Benefits of Graph Architecture
-
-### 1. **Flexibility**
-
-- Add new protocols without changing existing code
-- Support new device types through plugins
-- Dynamic path recalculation
-
-### 2. **Scalability**
-
-- Horizontal scaling of converter nodes
-- Load balancing across multiple instances
-- Resource optimization
-
-### 3. **Reliability**
-
-- Automatic failover to backup paths
-- Health monitoring of all nodes
-- Graceful degradation
-
-### 4. **Observability**
-
-- Complete flow tracing
-- Per-node metrics collection
-- Visual graph representation
-
-This graph-based architecture provides the foundation for a flexible, scalable call assistant that can adapt to changing requirements and network conditions while maintaining optimal performance.
