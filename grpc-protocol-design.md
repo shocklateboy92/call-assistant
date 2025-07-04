@@ -116,3 +116,212 @@ The protocol is designed to be implemented incrementally:
 4. Add EventService for comprehensive monitoring
 
 This design balances simplicity with the flexibility needed for a complex multi-protocol video calling system.
+
+## Core Message Types
+
+### **Module Management Messages**
+```
+ModuleInfo {
+  id: string
+  name: string
+  version: string
+  description: string
+  capabilities: ModuleCapabilities
+  status: ModuleStatus
+}
+
+ModuleCapabilities {
+  entity_types: [EntityType]      // VIDEO_SOURCE, VIDEO_SINK, CONVERTER, PROTOCOL
+  supported_protocols: [string]   // rtsp, webrtc, hls, chromecast, etc.
+  supported_codecs: [string]      // h264, vp8, opus, aac, etc.
+  features: [string]             // transcoding, scaling, recording, etc.
+}
+
+ModuleStatus {
+  state: ModuleState             // STARTING, READY, ERROR, STOPPING
+  health: HealthStatus           // HEALTHY, DEGRADED, UNHEALTHY
+  resource_usage: ResourceMetrics
+  error_message: string
+  last_heartbeat: timestamp
+}
+```
+
+### **Entity-Specific Messages**
+
+**Design Decision: Separate Audio/Video Entities**
+
+Rather than having a single entity that handles "both" audio and video, we use separate entities for each media type. This means:
+
+- A camera with microphone creates two entities: `camera_front_door_video` and `camera_front_door_audio`
+- Each entity has exactly one `MediaType` (AUDIO or VIDEO)
+- Each connection carries exactly one media type
+- Modules can coordinate between related entities internally
+
+**Benefits of this approach:**
+- **Simpler connections**: Each connection has exactly one media type
+- **Flexible routing**: Can route audio and video to different destinations independently
+- **Easier capability matching**: Only need to match capabilities for the specific media type
+- **More composable**: Can mix audio from one source with video from another
+- **Consistent**: Audio-only sources (microphones) and video-only sources (screen capture) fit naturally
+
+#### **Media Source Entities**
+```
+MediaSource {
+  id: string
+  name: string
+  type: string                   // rtsp, usb, hls, file, etc.
+  config: map<string, string>    // Plugin-specific configuration
+  status: EntityStatus
+  capabilities: EntityCapabilities
+}
+```
+
+#### **Media Sink Entities**
+```
+MediaSink {
+  id: string
+  name: string
+  type: string                   // chromecast, miracast, airplay, display, etc.
+  config: map<string, string>    // Plugin-specific configuration
+  status: EntityStatus
+  capabilities: EntityCapabilities
+}
+```
+
+#### **Protocol Entities**
+```
+Protocol {
+  id: string
+  name: string
+  type: string                   // matrix, xmpp, webrtc, sip, etc.
+  config: map<string, string>    // Plugin-specific configuration
+  status: EntityStatus
+  capabilities: EntityCapabilities
+}
+```
+
+#### **Converter Entities**
+```
+Converter {
+  id: string
+  name: string
+  type: string                   // go2rtc, ffmpeg, gstreamer, etc.
+  config: map<string, string>    // Plugin-specific configuration
+  status: EntityStatus
+  capabilities: EntityCapabilities
+}
+```
+
+### **Common Data Structures**
+```
+EntityStatus {
+  state: EntityState             // CREATED, CONFIGURED, ACTIVE, ERROR, DESTROYED
+  health: HealthStatus           // HEALTHY, DEGRADED, UNHEALTHY
+  error_message: string
+  active_connections: [string]   // Connection IDs
+  metrics: map<string, MetricValue>
+  created_at: timestamp
+  last_updated: timestamp
+}
+
+EntityCapabilities {
+  supported_protocols: [string]  // rtsp, webrtc, hls, etc.
+  supported_codecs: [string]     // h264, vp8, opus, aac, etc.
+  media_type: MediaType          // AUDIO, VIDEO
+  features: [string]             // transcoding, scaling, recording, etc.
+  max_concurrent_streams: int32
+  properties: map<string, string> // Additional capability metadata
+}
+
+Resolution {
+  width: int32
+  height: int32
+}
+
+QualityProfile {
+  resolution: Resolution
+  bitrate: int32
+  framerate: int32
+  video_codec: string
+  audio_codec: string
+}
+
+MediaFormat {
+  container: string              // mp4, webm, ts, raw
+  video_codec: string
+  audio_codec: string
+  resolution: Resolution
+  bitrate: int32
+}
+```
+
+### **Pipeline Management Messages**
+```
+Connection {
+  id: string
+  source_entity_id: string
+  target_entity_id: string
+  media_type: MediaType          // AUDIO, VIDEO
+  transport_protocol: string     // rtsp, webrtc, hls, etc.
+  quality: QualityProfile
+  status: ConnectionStatus
+  metrics: ConnectionMetrics
+}
+
+Flow {
+  id: string
+  name: string
+  connections: [Connection]      // Ordered list forming the pipeline
+  status: FlowStatus
+  metrics: FlowMetrics
+  created_at: timestamp
+  started_at: timestamp
+}
+
+FlowStatus {
+  state: FlowState              // INITIALIZING, ACTIVE, STOPPED, ERROR
+  health: HealthStatus
+  error_message: string
+  bandwidth_usage: int64
+  latency_ms: int32
+}
+```
+
+### **Event and Status Messages**
+```
+Event {
+  id: string
+  type: EventType               // ENTITY_CREATED, FLOW_STARTED, ERROR, WARNING
+  severity: EventSeverity       // INFO, WARNING, ERROR, CRITICAL
+  source_module_id: string
+  source_entity_id: string
+  message: string
+  details: map<string, string>
+  timestamp: timestamp
+}
+
+StatusUpdate {
+  module_id: string
+  entity_id: string
+  entity_status: EntityStatus
+  timestamp: timestamp
+}
+
+Metrics {
+  module_id: string
+  entity_id: string
+  flow_id: string
+  connection_id: string
+  metrics: map<string, MetricValue>
+  timestamp: timestamp
+}
+
+MetricValue {
+  oneof value {
+    int64 int_value = 1;
+    double double_value = 2;
+    string string_value = 3;
+    bool bool_value = 4;
+  }
+}
+```
