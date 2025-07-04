@@ -172,7 +172,7 @@ MediaSource {
   type: string                   // rtsp, usb, hls, file, etc.
   config: map<string, string>    // Plugin-specific configuration
   status: EntityStatus
-  capabilities: EntityCapabilities
+  provides: EntityCapabilities
 }
 ```
 
@@ -184,7 +184,7 @@ MediaSink {
   type: string                   // chromecast, miracast, airplay, display, etc.
   config: map<string, string>    // Plugin-specific configuration
   status: EntityStatus
-  capabilities: EntityCapabilities
+  requires: EntityCapabilities
 }
 ```
 
@@ -196,7 +196,8 @@ Protocol {
   type: string                   // matrix, xmpp, webrtc, sip, etc.
   config: map<string, string>    // Plugin-specific configuration
   status: EntityStatus
-  capabilities: EntityCapabilities
+  requiresAudio: EntityCapabilities
+  requiresVideo: EntityCapabilities
 }
 ```
 
@@ -208,7 +209,8 @@ Converter {
   type: string                   // go2rtc, ffmpeg, gstreamer, etc.
   config: map<string, string>    // Plugin-specific configuration
   status: EntityStatus
-  capabilities: EntityCapabilities
+  input: EntityCapabilities
+  output: EntityCapabilities
 }
 ```
 
@@ -228,8 +230,6 @@ EntityCapabilities {
   supported_protocols: [string]  // rtsp, webrtc, hls, etc.
   supported_codecs: [string]     // h264, vp8, opus, aac, etc.
   media_type: MediaType          // AUDIO, VIDEO
-  features: [string]             // transcoding, scaling, recording, etc.
-  max_concurrent_streams: int32
   properties: map<string, string> // Additional capability metadata
 }
 
