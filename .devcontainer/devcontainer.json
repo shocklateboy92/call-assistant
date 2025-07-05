@@ -7,6 +7,7 @@
 	"workspaceFolder": "/workspaces/universal",
 	// Features to add to the dev container. More info: https://containers.dev/features.
 	"features": {
+		"ghcr.io/devcontainers/features/go": {},
 		"ghcr.io/devcontainers/features/python": {
 			"version": "3.13"
 		},
@@ -31,7 +32,7 @@
 		"mock-chromecast:8008"     // Mock Chromecast for testing
 	],
 	// Run setup script after container creation
-	// "postCreateCommand": "call_assist/scripts/setup-dev-env.sh",
+	"postCreateCommand": "scripts/setup-dev-env.sh",
 	// Configure tool-specific properties.
 	"customizations": {
 		"vscode": {
