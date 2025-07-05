@@ -220,7 +220,7 @@ func printModuleStatus(registry *internal.ModuleRegistry) {
 	logAttrs := []any{"total", len(allModules)}
 	for status, count := range statusCounts {
 		if count > 0 {
-			logAttrs = append(logAttrs, string(status), count)
+			logAttrs = append(logAttrs, string(rune(status)), count)
 		}
 	}
 	slog.Info("Module status summary", logAttrs...)
