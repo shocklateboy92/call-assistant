@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package universal.common;
+package call_assistant.common;
 
 option go_package = "github.com/shocklateboy92/call-assistant/src/api/proto/common";
 

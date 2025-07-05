@@ -7,7 +7,7 @@ services:
   devcontainer:
     image: mcr.microsoft.com/devcontainers/base:ubuntu
     volumes:
-      - .:/workspaces/universal:cached
+      - .:/workspaces/call-assistant:cached
       - /var/run/docker.sock:/var/run/docker-host.sock
       - ./runtime/claude-state:/home/vscode/.claude
       # Git config was not getting copied automatically for some reason

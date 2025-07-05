@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package universal.module;
+package call_assistant.module;
 
 option go_package = "github.com/shocklateboy92/call-assistant/src/api/proto/module";
 
@@ -46,7 +46,7 @@ message RegisterModuleRequest {
 }
 
 message RegisterModuleResponse {
-  universal.common.ModuleInfo module_info = 1;
+  call_assistant.common.ModuleInfo module_info = 1;
   bool success = 2;
   string error_message = 3;
 }
@@ -57,7 +57,7 @@ message HealthCheckRequest {
 }
 
 message HealthCheckResponse {
-  universal.common.ModuleStatus status = 1;
+  call_assistant.common.ModuleStatus status = 1;
 }
 
 // Configuration messages
@@ -68,7 +68,7 @@ message ConfigureRequest {
 message ConfigureResponse {
   bool success = 1;
   string error_message = 2;
-  universal.common.ModuleStatus status = 3;
+  call_assistant.common.ModuleStatus status = 3;
 }
 
 // Shutdown messages
@@ -84,12 +84,12 @@ message ShutdownResponse {
 
 // Module info messages
 message GetModuleInfoResponse {
-  universal.common.ModuleInfo module_info = 1;
+  call_assistant.common.ModuleInfo module_info = 1;
 }
 
 // Event reporting messages
 message ReportEventRequest {
-  universal.events.Event event = 1;
+  call_assistant.events.Event event = 1;
 }
 
 message ReportEventResponse {
@@ -98,7 +98,7 @@ message ReportEventResponse {
 }
 
 message ReportStatusRequest {
-  universal.common.StatusUpdate status_update = 1;
+  call_assistant.common.StatusUpdate status_update = 1;
 }
 
 message ReportStatusResponse {
@@ -107,7 +107,7 @@ message ReportStatusResponse {
 }
 
 message ReportMetricsRequest {
-  universal.common.Metrics metrics = 1;
+  call_assistant.common.Metrics metrics = 1;
 }
 
 message ReportMetricsResponse {

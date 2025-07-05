@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package universal.events;
+package call_assistant.events;
 
 option go_package = "github.com/shocklateboy92/call-assistant/src/api/proto/events";
 
@@ -35,7 +35,7 @@ message Event {
 message ModuleStartedEvent {
   string module_version = 1;
   int32 startup_duration_ms = 2;
-  universal.common.ModuleCapabilities capabilities = 3;
+  call_assistant.common.ModuleCapabilities capabilities = 3;
   string process_id = 4;
   int32 grpc_port = 5;
 }
@@ -62,10 +62,10 @@ message ModuleConfiguredEvent {
 }
 
 message ModuleHealthChangedEvent {
-  universal.common.HealthStatus old_health = 1;
-  universal.common.HealthStatus new_health = 2;
+  call_assistant.common.HealthStatus old_health = 1;
+  call_assistant.common.HealthStatus new_health = 2;
   string reason = 3;
-  universal.common.ResourceMetrics current_metrics = 4;
+  call_assistant.common.ResourceMetrics current_metrics = 4;
 }
 
 // Generic event for cases not covered by specific types

@@ -4,7 +4,7 @@
 	"name": "Call Assist Development",
 	"dockerComposeFile": "../docker-compose.dev.yml",
 	"service": "devcontainer",
-	"workspaceFolder": "/workspaces/universal",
+	"workspaceFolder": "/workspaces/call-assistant",
 	// Features to add to the dev container. More info: https://containers.dev/features.
 	"features": {
 		"ghcr.io/devcontainers/features/go": {},
