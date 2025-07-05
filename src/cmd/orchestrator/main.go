@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -42,18 +43,18 @@ func main() {
 
 	// Run the orchestrator
 	if err := runOrchestrator(ctx, *modulesDir, *devMode, *verbose); err != nil {
-		fmt.Printf("Error: %v\n", err)
+		slog.Error("Orchestrator failed", "error", err)
 		os.Exit(1)
 	}
 
 	// Wait for shutdown signal
 	<-sigChan
-	fmt.Println("\nShutdown signal received. Gracefully stopping modules...")
+	slog.Info("Shutdown signal received. Gracefully stopping modules...")
 	cancel()
 
 	// Give some time for cleanup
 	time.Sleep(2 * time.Second)
-	fmt.Println("Orchestrator shutdown complete.")
+	slog.Info("Orchestrator shutdown complete")
 }
 
 func runOrchestrator(ctx context.Context, modulesDir string, devMode bool, verbose bool) error {
@@ -64,7 +65,7 @@ func runOrchestrator(ctx context.Context, modulesDir string, devMode bool, verbo
 	}
 
 	if verbose {
-		fmt.Printf("Resolved modules directory: %s\n", absModulesDir)
+		slog.Info("Resolved modules directory", "path", absModulesDir)
 	}
 
 	// Phase 1: Module Discovery
@@ -77,18 +78,11 @@ func runOrchestrator(ctx context.Context, modulesDir string, devMode bool, verbo
 		return fmt.Errorf("module discovery failed: %w", err)
 	}
 
-	fmt.Printf("✓ Discovered %d modules:\n", len(modules))
+	slog.Info("Module discovery completed", "count", len(modules))
 	for _, module := range modules {
-		fmt.Printf("  • %s (v%s) - %s\n", module.Manifest.Name, module.Manifest.Version, module.Manifest.Description)
+		slog.Info("Discovered module", "name", module.Manifest.Name, "version", module.Manifest.Version, "description", module.Manifest.Description)
 		if verbose {
-			fmt.Printf("    Path: %s\n", module.Path)
-			fmt.Printf("    Command: %s\n", module.Manifest.Command)
-			if module.Manifest.DevCommand != "" {
-				fmt.Printf("    Dev Command: %s\n", module.Manifest.DevCommand)
-			}
-			if len(module.Manifest.Dependencies) > 0 {
-				fmt.Printf("    Dependencies: %v\n", module.Manifest.Dependencies)
-			}
+			slog.Debug("Module details", "path", module.Path, "command", module.Manifest.Command, "dev_command", module.Manifest.DevCommand, "dependencies", module.Manifest.Dependencies)
 		}
 	}
 
@@ -101,7 +95,7 @@ func runOrchestrator(ctx context.Context, modulesDir string, devMode bool, verbo
 		if err := registry.RegisterModule(module); err != nil {
 			return fmt.Errorf("failed to register module %s: %w", module.ID, err)
 		}
-		fmt.Printf("✓ Registered module: %s\n", module.ID)
+		slog.Info("Registered module", "id", module.ID)
 	}
 
 	// Phase 3: Dependency Resolution
@@ -113,9 +107,9 @@ func runOrchestrator(ctx context.Context, modulesDir string, devMode bool, verbo
 	}
 
 	orderedModules := registry.GetModulesInStartOrder()
-	fmt.Printf("✓ Calculated startup order:\n")
+	slog.Info("Calculated startup order")
 	for i, module := range orderedModules {
-		fmt.Printf("  %d. %s\n", i+1, module.Module.ID)
+		slog.Info("Module startup order", "position", i+1, "module_id", module.Module.ID)
 	}
 
 	// Phase 4: Module Lifecycle Management
@@ -129,7 +123,7 @@ func runOrchestrator(ctx context.Context, modulesDir string, devMode bool, verbo
 		return fmt.Errorf("failed to start modules: %w", err)
 	}
 
-	fmt.Printf("✓ All modules started successfully\n")
+	slog.Info("All modules started successfully")
 
 	// Phase 5: Status Monitoring
 	fmt.Println("\n📊 Phase 5: Status Monitoring")
@@ -146,7 +140,7 @@ func runOrchestrator(ctx context.Context, modulesDir string, devMode bool, verbo
 	fmt.Println("───────────────────────────────────────────────────────────────")
 
 	if err := manager.StopAllModules(); err != nil {
-		fmt.Printf("Warning: Error during module shutdown: %v\n", err)
+		slog.Warn("Error during module shutdown", "error", err)
 	}
 
 	return nil
@@ -171,49 +165,45 @@ func monitorModuleStatus(ctx context.Context, registry *internal.ModuleRegistry,
 func printModuleStatus(registry *internal.ModuleRegistry) {
 	allModules := registry.GetAllModules()
 	
-	fmt.Printf("\n📊 Module Status Report (%s)\n", time.Now().Format("15:04:05"))
-	fmt.Println("───────────────────────────────────────────────────────────────")
+	slog.Info("Module Status Report")
 	
 	statusCounts := make(map[internal.ModuleStatus]int)
 	
 	for _, module := range allModules {
 		statusCounts[module.Status]++
 		
-		statusIcon := "?"
-		switch module.Status {
-		case internal.ModuleStatusRunning:
-			statusIcon = "✓"
-		case internal.ModuleStatusError:
-			statusIcon = "✗"
-		case internal.ModuleStatusStarting:
-			statusIcon = "⏳"
-		case internal.ModuleStatusStopped:
-			statusIcon = "⏸"
+		logAttrs := []any{
+			"module_id", module.Module.ID,
+			"status", module.Status,
 		}
 		
-		fmt.Printf("  %s %s [%s]", statusIcon, module.Module.ID, module.Status)
-		
 		if module.GRPCPort > 0 {
-			fmt.Printf(" (Port: %d)", module.GRPCPort)
+			logAttrs = append(logAttrs, "port", module.GRPCPort)
 		}
 		
 		if module.ProcessID > 0 {
-			fmt.Printf(" (PID: %d)", module.ProcessID)
+			logAttrs = append(logAttrs, "pid", module.ProcessID)
 		}
 		
 		if module.ErrorMsg != "" {
-			fmt.Printf(" - Error: %s", module.ErrorMsg)
+			logAttrs = append(logAttrs, "error", module.ErrorMsg)
 		}
 		
-		fmt.Println()
-	}
-	
-	fmt.Println("───────────────────────────────────────────────────────────────")
-	fmt.Printf("Total: %d modules", len(allModules))
-	for status, count := range statusCounts {
-		if count > 0 {
-			fmt.Printf(" | %s: %d", status, count)
+		switch module.Status {
+		case internal.ModuleStatusError:
+			slog.Error("Module status", logAttrs...)
+		case internal.ModuleStatusRunning:
+			slog.Info("Module status", logAttrs...)
+		default:
+			slog.Debug("Module status", logAttrs...)
 		}
 	}
-	fmt.Println()
+	
+	logAttrs := []any{"total", len(allModules)}
+	for status, count := range statusCounts {
+		if count > 0 {
+			logAttrs = append(logAttrs, string(status), count)
+		}
+	}
+	slog.Info("Module status summary", logAttrs...)
 }

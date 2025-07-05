@@ -2,6 +2,7 @@ package internal
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -57,7 +58,7 @@ func (md *ModuleDiscovery) DiscoverModules() ([]DiscoveredModule, error) {
 		if info.Name() == "module.yaml" {
 			module, err := md.parseModuleManifest(path)
 			if err != nil {
-				fmt.Printf("Warning: failed to parse module manifest at %s: %v\n", path, err)
+				slog.Warn("Failed to parse module manifest", "path", path, "error", err)
 				return nil // Continue walking, don't fail the entire discovery
 			}
 
