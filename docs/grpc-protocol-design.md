@@ -140,7 +140,6 @@ ModuleCapabilities {
 ModuleStatus {
   state: ModuleState             // STARTING, READY, ERROR, STOPPING
   health: HealthStatus           // HEALTHY, DEGRADED, UNHEALTHY
-  resource_usage: ResourceMetrics
   error_message: string
   last_heartbeat: timestamp
 }

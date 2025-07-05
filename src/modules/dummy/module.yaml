@@ -1,0 +1,8 @@
+name: "dummy"
+version: "1.0.0"
+description: "Dummy test module for testing orchestrator functionality"
+
+command: "npm start"
+dev_command: "npm run dev"
+
+dependencies: []
