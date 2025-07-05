@@ -32,7 +32,7 @@
 		"mock-chromecast:8008"     // Mock Chromecast for testing
 	],
 	// Run setup script after container creation
-	"postCreateCommand": "scripts/setup-dev-env.sh",
+	"postCreateCommand": "cat config/bashrc >> ~/.bashrc && scripts/setup-dev-env.sh",
 	// Configure tool-specific properties.
 	"customizations": {
 		"vscode": {
