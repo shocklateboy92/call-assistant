@@ -14,60 +14,30 @@ import (
 
 // ModuleManager handles the lifecycle of modules
 type ModuleManager struct {
-	registry    *ModuleRegistry
-	portManager *PortManager
-	processes   map[string]*exec.Cmd
-}
-
-// PortManager manages gRPC port allocation
-type PortManager struct {
-	usedPorts map[int]bool
-	nextPort  int
-}
-
-// NewPortManager creates a new port manager starting from the given port
-func NewPortManager(startPort int) *PortManager {
-	return &PortManager{
-		usedPorts: make(map[int]bool),
-		nextPort:  startPort,
-	}
-}
-
-// AllocatePort allocates an available port
-func (pm *PortManager) AllocatePort() (int, error) {
-	for i := range 1000 { // Try up to 1000 ports
-		port := pm.nextPort + i
-		if !pm.usedPorts[port] && pm.isPortAvailable(port) {
-			pm.usedPorts[port] = true
-			return port, nil
-		}
-	}
-	return 0, fmt.Errorf("no available ports found")
-}
-
-// ReleasePort releases a previously allocated port
-func (pm *PortManager) ReleasePort(port int) {
-	delete(pm.usedPorts, port)
-}
-
-// isPortAvailable checks if a port is available for binding
-func (pm *PortManager) isPortAvailable(port int) bool {
-	addr := fmt.Sprintf(":%d", port)
-	listener, err := net.Listen("tcp", addr)
-	if err != nil {
-		return false
-	}
-	listener.Close()
-	return true
+	registry  *ModuleRegistry
+	processes map[string]*exec.Cmd
 }
 
 // NewModuleManager creates a new module manager
 func NewModuleManager(registry *ModuleRegistry) *ModuleManager {
 	return &ModuleManager{
-		registry:    registry,
-		portManager: NewPortManager(50051), // Start from port 50051
-		processes:   make(map[string]*exec.Cmd),
+		registry:  registry,
+		processes: make(map[string]*exec.Cmd),
 	}
+}
+
+// allocatePort allocates an available port by letting the OS choose
+func allocatePort() (int, error) {
+	// Listen on port 0 to let the OS choose an available port
+	listener, err := net.Listen("tcp", ":0")
+	if err != nil {
+		return 0, fmt.Errorf("failed to allocate port: %w", err)
+	}
+	defer listener.Close()
+
+	// Extract the port number from the address
+	addr := listener.Addr().(*net.TCPAddr)
+	return addr.Port, nil
 }
 
 // StartAllModules starts all registered modules in dependency order
@@ -110,7 +80,7 @@ func (mm *ModuleManager) StartModule(ctx context.Context, moduleID string, isDev
 	}
 
 	// Allocate a port for the module
-	port, err := mm.portManager.AllocatePort()
+	port, err := allocatePort()
 	if err != nil {
 		mm.registry.UpdateModuleStatus(moduleID, ModuleStatusError, err.Error())
 		return fmt.Errorf("failed to allocate port: %w", err)
@@ -125,7 +95,6 @@ func (mm *ModuleManager) StartModule(ctx context.Context, moduleID string, isDev
 	// Parse the command
 	cmdParts := strings.Fields(command)
 	if len(cmdParts) == 0 {
-		mm.portManager.ReleasePort(port)
 		mm.registry.UpdateModuleStatus(moduleID, ModuleStatusError, "empty command")
 		return fmt.Errorf("empty command for module %s", moduleID)
 	}
@@ -144,7 +113,6 @@ func (mm *ModuleManager) StartModule(ctx context.Context, moduleID string, isDev
 
 	// Start the process
 	if err := cmd.Start(); err != nil {
-		mm.portManager.ReleasePort(port)
 		mm.registry.UpdateModuleStatus(moduleID, ModuleStatusError, err.Error())
 		return fmt.Errorf("failed to start module process: %w", err)
 	}
@@ -194,7 +162,7 @@ func (mm *ModuleManager) StartModule(ctx context.Context, moduleID string, isDev
 
 // StopModule stops a running module
 func (mm *ModuleManager) StopModule(moduleID string) error {
-	regModule, exists := mm.registry.GetModule(moduleID)
+	_, exists := mm.registry.GetModule(moduleID)
 	if !exists {
 		return fmt.Errorf("module %s not found in registry", moduleID)
 	}
@@ -227,9 +195,6 @@ func (mm *ModuleManager) StopModule(moduleID string) error {
 		// Process exited gracefully
 	}
 
-	// Release the port
-	mm.portManager.ReleasePort(regModule.GRPCPort)
-
 	// Update status
 	mm.registry.UpdateModuleStatus(moduleID, ModuleStatusStopped, "")
 
@@ -257,9 +222,6 @@ func (mm *ModuleManager) StopAllModules() error {
 func (mm *ModuleManager) monitorProcess(moduleID string, cmd *exec.Cmd, port int) {
 	// Wait for the process to exit
 	err := cmd.Wait()
-
-	// Release the port
-	mm.portManager.ReleasePort(port)
 
 	// Update status based on exit condition
 	if err != nil {
