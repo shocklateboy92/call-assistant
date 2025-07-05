@@ -1,0 +1,17 @@
+{
+  "name": "call-assistant-protos",
+  "version": "1.0.0",
+  "description": "Generated protobuf files for typescript",
+  "main": "index.js",
+  "scripts": {
+    "generate": "protoc \"--plugin=protoc-gen-ts_proto=$(which protoc-gen-ts_proto)\" --ts_proto_out=. --ts_proto_opt=outputServices=nice-grpc,outputServices=generic-definitions,useExactTypes=false,esModuleInterop=true,oneof=unions,snakeToCamel=false,outputClientImpl=false,env=node,useDate=true --proto_path=../../api/proto ../../api/proto/*.proto",
+    "test": ""
+  },
+  "license": "ISC",
+  "dependencies": {
+    "nice-grpc-common": "^2.0.2"
+  },
+  "devDependencies": {
+    "ts-proto": "^2.7.5"
+  }
+}

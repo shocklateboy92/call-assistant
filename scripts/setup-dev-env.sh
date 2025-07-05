@@ -11,7 +11,7 @@ go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
 
 # Install Node.js protobuf tools for nice-grpc
 echo "Installing Node.js protobuf tools for nice-grpc..."
-npm install -g ts-proto
+npm --prefix src/generated/typescript install
 
 # Generate protobuf code
 echo "Generating protobuf code..."

@@ -15,15 +15,11 @@ protoc --go_out=src/generated/go --go-grpc_out=src/generated/go \
 
 # Generate TypeScript code (requires ts-proto for nice-grpc)
 echo "Generating TypeScript code..."
-if command -v protoc-gen-ts_proto >/dev/null 2>&1; then
-  protoc "--plugin=protoc-gen-ts_proto=$(which protoc-gen-ts_proto)" \
-    --ts_proto_out=src/generated/typescript \
-    --ts_proto_opt=outputServices=nice-grpc,outputServices=generic-definitions,useExactTypes=false \
-    --proto_path=src/api/proto \
-    src/api/proto/*.proto
+if npm --prefix src/generated/typescript run generate ; then
+  echo "TypeScript generation completed successfully"
 else
-  echo "Warning: ts-proto not found, skipping TypeScript generation"
-  echo "Install with: npm install ts-proto"
+  echo "Warning: TypeScript generation failed"
+  echo "Make sure ts-proto is installed: npm install"
 fi
 
 echo "Protobuf generation complete!"
