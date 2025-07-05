@@ -41,20 +41,20 @@ func main() {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	// Run the orchestrator
+	// Start signal handler in a goroutine
+	go func() {
+		<-sigChan
+		fmt.Println("\nShutdown signal received. Gracefully stopping modules...")
+		cancel()
+	}()
+
+	// Run the orchestrator (this will block until ctx is cancelled)
 	if err := runOrchestrator(ctx, *modulesDir, *devMode, *verbose); err != nil {
-		slog.Error("Orchestrator failed", "error", err)
+		fmt.Printf("Error: %v\n", err)
 		os.Exit(1)
 	}
 
-	// Wait for shutdown signal
-	<-sigChan
-	slog.Info("Shutdown signal received. Gracefully stopping modules...")
-	cancel()
-
-	// Give some time for cleanup
-	time.Sleep(2 * time.Second)
-	slog.Info("Orchestrator shutdown complete")
+	fmt.Println("Orchestrator shutdown complete.")
 }
 
 func runOrchestrator(ctx context.Context, modulesDir string, devMode bool, verbose bool) error {
