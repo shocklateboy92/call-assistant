@@ -1,0 +1,79 @@
+syntax = "proto3";
+
+package universal.common;
+
+option go_package = "github.com/universal/api/proto/common";
+
+import "google/protobuf/timestamp.proto";
+
+// Common enums
+enum ModuleState {
+  MODULE_STATE_UNSPECIFIED = 0;
+  MODULE_STATE_STARTING = 1;
+  MODULE_STATE_READY = 2;
+  MODULE_STATE_ERROR = 3;
+  MODULE_STATE_STOPPING = 4;
+}
+
+enum HealthStatus {
+  HEALTH_STATUS_UNSPECIFIED = 0;
+  HEALTH_STATUS_HEALTHY = 1;
+  HEALTH_STATUS_DEGRADED = 2;
+  HEALTH_STATUS_UNHEALTHY = 3;
+}
+
+
+// Common message types
+message ResourceMetrics {
+  int64 cpu_usage_percent = 1;
+  int64 memory_usage_bytes = 2;
+  int64 network_bytes_sent = 3;
+  int64 network_bytes_received = 4;
+  int32 open_connections = 5;
+}
+
+message MetricValue {
+  oneof value {
+    int64 int_value = 1;
+    double double_value = 2;
+    string string_value = 3;
+    bool bool_value = 4;
+  }
+}
+
+
+message ModuleStatus {
+  ModuleState state = 1;
+  HealthStatus health = 2;
+  ResourceMetrics resource_usage = 3;
+  string error_message = 4;
+  google.protobuf.Timestamp last_heartbeat = 5;
+}
+
+message ModuleCapabilities {
+  repeated string supported_protocols = 1;
+  repeated string supported_codecs = 2;
+  repeated string features = 3;
+}
+
+message ModuleInfo {
+  string id = 1;
+  string name = 2;
+  string version = 3;
+  string description = 4;
+  ModuleCapabilities capabilities = 5;
+  ModuleStatus status = 6;
+}
+
+
+message StatusUpdate {
+  string module_id = 1;
+  ModuleStatus module_status = 2;
+  google.protobuf.Timestamp timestamp = 3;
+}
+
+message Metrics {
+  string module_id = 1;
+  map<string, MetricValue> metrics = 2;
+  google.protobuf.Timestamp timestamp = 3;
+}

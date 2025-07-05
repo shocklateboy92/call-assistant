@@ -1,0 +1,116 @@
+syntax = "proto3";
+
+package universal.module;
+
+option go_package = "github.com/universal/api/proto/module";
+
+import "common.proto";
+import "events.proto";
+import "google/protobuf/empty.proto";
+
+// ModuleService is implemented by each module to handle lifecycle management
+service ModuleService {
+  // RegisterModule is called by the orchestrator during module startup
+  // The module responds with its capabilities and initial status
+  rpc RegisterModule(RegisterModuleRequest) returns (RegisterModuleResponse);
+  
+  // HealthCheck is called periodically by the orchestrator to monitor module health
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+  
+  // Configure is called to update module configuration at runtime
+  rpc Configure(ConfigureRequest) returns (ConfigureResponse);
+  
+  // Shutdown is called to gracefully stop the module
+  rpc Shutdown(ShutdownRequest) returns (ShutdownResponse);
+  
+  // GetModuleInfo returns current module information and status
+  rpc GetModuleInfo(google.protobuf.Empty) returns (GetModuleInfoResponse);
+}
+
+// EventService is implemented by the orchestrator to receive events from modules
+service EventService {
+  // ReportEvent is called by modules to send events to the orchestrator
+  rpc ReportEvent(ReportEventRequest) returns (ReportEventResponse);
+  
+  // ReportStatus is called by modules to send status updates
+  rpc ReportStatus(ReportStatusRequest) returns (ReportStatusResponse);
+  
+  // ReportMetrics is called by modules to send performance metrics
+  rpc ReportMetrics(ReportMetricsRequest) returns (ReportMetricsResponse);
+}
+
+// Module registration messages
+message RegisterModuleRequest {
+  string module_id = 1;
+  string orchestrator_address = 2; // Address of orchestrator's EventService
+}
+
+message RegisterModuleResponse {
+  universal.common.ModuleInfo module_info = 1;
+  bool success = 2;
+  string error_message = 3;
+}
+
+// Health check messages
+message HealthCheckRequest {
+  // Empty for now, could include health check parameters in the future
+}
+
+message HealthCheckResponse {
+  universal.common.ModuleStatus status = 1;
+}
+
+// Configuration messages
+message ConfigureRequest {
+  map<string, string> config = 1;
+}
+
+message ConfigureResponse {
+  bool success = 1;
+  string error_message = 2;
+  universal.common.ModuleStatus status = 3;
+}
+
+// Shutdown messages
+message ShutdownRequest {
+  bool force = 1; // If true, module should shut down immediately
+  int32 timeout_seconds = 2; // How long to wait for graceful shutdown
+}
+
+message ShutdownResponse {
+  bool success = 1;
+  string error_message = 2;
+}
+
+// Module info messages
+message GetModuleInfoResponse {
+  universal.common.ModuleInfo module_info = 1;
+}
+
+// Event reporting messages
+message ReportEventRequest {
+  universal.events.Event event = 1;
+}
+
+message ReportEventResponse {
+  bool success = 1;
+  string error_message = 2;
+}
+
+message ReportStatusRequest {
+  universal.common.StatusUpdate status_update = 1;
+}
+
+message ReportStatusResponse {
+  bool success = 1;
+  string error_message = 2;
+}
+
+message ReportMetricsRequest {
+  universal.common.Metrics metrics = 1;
+}
+
+message ReportMetricsResponse {
+  bool success = 1;
+  string error_message = 2;
+}

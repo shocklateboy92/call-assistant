@@ -1,0 +1,75 @@
+syntax = "proto3";
+
+package universal.events;
+
+option go_package = "github.com/universal/api/proto/events";
+
+import "common.proto";
+import "google/protobuf/timestamp.proto";
+
+enum EventSeverity {
+  EVENT_SEVERITY_UNSPECIFIED = 0;
+  EVENT_SEVERITY_INFO = 1;
+  EVENT_SEVERITY_WARNING = 2;
+  EVENT_SEVERITY_ERROR = 3;
+  EVENT_SEVERITY_CRITICAL = 4;
+}
+
+message Event {
+  string id = 1;
+  EventSeverity severity = 2;
+  string source_module_id = 3;
+  google.protobuf.Timestamp timestamp = 4;
+  
+  oneof event_data {
+    ModuleStartedEvent module_started = 10;
+    ModuleStoppedEvent module_stopped = 11;
+    ModuleErrorEvent module_error = 12;
+    ModuleConfiguredEvent module_configured = 13;
+    ModuleHealthChangedEvent module_health_changed = 14;
+    GenericEvent generic = 15;
+  }
+}
+
+// Specific event types for module lifecycle
+message ModuleStartedEvent {
+  string module_version = 1;
+  int32 startup_duration_ms = 2;
+  universal.common.ModuleCapabilities capabilities = 3;
+  string process_id = 4;
+  int32 grpc_port = 5;
+}
+
+message ModuleStoppedEvent {
+  string reason = 1;
+  int32 shutdown_duration_ms = 2;
+  bool was_graceful = 3;
+  int32 exit_code = 4;
+}
+
+message ModuleErrorEvent {
+  string error_code = 1;
+  string error_message = 2;
+  string stack_trace = 3;
+  bool is_recoverable = 4;
+  int32 retry_attempt = 5;
+}
+
+message ModuleConfiguredEvent {
+  map<string, string> old_config = 1;
+  map<string, string> new_config = 2;
+  repeated string changed_keys = 3;
+}
+
+message ModuleHealthChangedEvent {
+  universal.common.HealthStatus old_health = 1;
+  universal.common.HealthStatus new_health = 2;
+  string reason = 3;
+  universal.common.ResourceMetrics current_metrics = 4;
+}
+
+// Generic event for cases not covered by specific types
+message GenericEvent {
+  string message = 1;
+  map<string, string> details = 2;
+}
