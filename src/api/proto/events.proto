@@ -65,7 +65,6 @@ message ModuleHealthChangedEvent {
   call_assistant.common.HealthStatus old_health = 1;
   call_assistant.common.HealthStatus new_health = 2;
   string reason = 3;
-  call_assistant.common.ResourceMetrics current_metrics = 4;
 }
 
 // Generic event for cases not covered by specific types
