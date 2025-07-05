@@ -3,6 +3,7 @@ package internal
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net"
 	"os"
 	"os/exec"
@@ -73,7 +74,7 @@ func NewModuleManager(registry *ModuleRegistry) *ModuleManager {
 func (mm *ModuleManager) StartAllModules(ctx context.Context, isDev bool) error {
 	modules := mm.registry.GetModulesInStartOrder()
 
-	fmt.Printf("Starting %d modules in dependency order...\n", len(modules))
+	slog.Info("Starting modules in dependency order", "count", len(modules))
 
 	for _, module := range modules {
 		if err := mm.StartModule(ctx, module.Module.ID, isDev); err != nil {
@@ -175,7 +176,7 @@ func (mm *ModuleManager) StartModule(ctx context.Context, moduleID string, isDev
 		return fmt.Errorf("failed to update module status: %w", err)
 	}
 
-	fmt.Printf("Module %s started successfully on port %d (PID: %d)\n", moduleID, port, cmd.Process.Pid)
+	slog.Info("Module started successfully", "module_id", moduleID, "port", port, "pid", cmd.Process.Pid)
 	return nil
 }
 
@@ -223,7 +224,7 @@ func (mm *ModuleManager) StopModule(moduleID string) error {
 	// Remove from processes map
 	delete(mm.processes, moduleID)
 
-	fmt.Printf("Module %s stopped\n", moduleID)
+	slog.Info("Module stopped", "module_id", moduleID)
 	return nil
 }
 
@@ -233,7 +234,7 @@ func (mm *ModuleManager) StopAllModules() error {
 
 	for _, module := range modules {
 		if err := mm.StopModule(module.Module.ID); err != nil {
-			fmt.Printf("Warning: failed to stop module %s: %v\n", module.Module.ID, err)
+			slog.Warn("Failed to stop module", "module_id", module.Module.ID, "error", err)
 		}
 	}
 
@@ -251,10 +252,10 @@ func (mm *ModuleManager) monitorProcess(moduleID string, cmd *exec.Cmd, port int
 	// Update status based on exit condition
 	if err != nil {
 		mm.registry.UpdateModuleStatus(moduleID, ModuleStatusError, err.Error())
-		fmt.Printf("Module %s exited with error: %v\n", moduleID, err)
+		slog.Error("Module exited with error", "module_id", moduleID, "error", err)
 	} else {
 		mm.registry.UpdateModuleStatus(moduleID, ModuleStatusStopped, "")
-		fmt.Printf("Module %s exited normally\n", moduleID)
+		slog.Info("Module exited normally", "module_id", moduleID)
 	}
 
 	// Remove from processes map
@@ -270,7 +271,7 @@ type moduleLogger struct {
 func (ml *moduleLogger) Write(p []byte) (n int, err error) {
 	message := strings.TrimSpace(string(p))
 	if message != "" {
-		fmt.Printf("[%s:%s] %s\n", ml.moduleID, ml.prefix, message)
+		slog.Info("Module log", "module_id", ml.moduleID, "stream", ml.prefix, "message", message)
 	}
 	return len(p), nil
 }
