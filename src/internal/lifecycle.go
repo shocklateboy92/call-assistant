@@ -167,7 +167,11 @@ func (mm *ModuleManager) StartModule(ctx context.Context, moduleID string, isDev
 	// Check if process is still running
 	if cmd.ProcessState != nil && cmd.ProcessState.Exited() {
 		exitCode := cmd.ProcessState.ExitCode()
-		mm.registry.UpdateModuleStatus(moduleID, ModuleStatusError, fmt.Sprintf("process exited with code %d", exitCode))
+		mm.registry.UpdateModuleStatus(
+			moduleID,
+			ModuleStatusError,
+			fmt.Sprintf("process exited with code %d", exitCode),
+		)
 		return fmt.Errorf("module %s exited immediately with code %d", moduleID, exitCode)
 	}
 
@@ -176,7 +180,15 @@ func (mm *ModuleManager) StartModule(ctx context.Context, moduleID string, isDev
 		return fmt.Errorf("failed to update module status: %w", err)
 	}
 
-	slog.Info("Module started successfully", "module_id", moduleID, "port", port, "pid", cmd.Process.Pid)
+	slog.Info(
+		"Module started successfully",
+		"module_id",
+		moduleID,
+		"port",
+		port,
+		"pid",
+		cmd.Process.Pid,
+	)
 	return nil
 }
 

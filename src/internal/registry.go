@@ -40,12 +40,12 @@ func (s ModuleStatus) String() string {
 
 // RegisteredModule represents a module that has been registered with the orchestrator
 type RegisteredModule struct {
-	Module      DiscoveredModule
-	Status      ModuleStatus
-	GRPCPort    int
-	ProcessID   int
-	ErrorMsg    string
-	StartOrder  int
+	Module     DiscoveredModule
+	Status     ModuleStatus
+	GRPCPort   int
+	ProcessID  int
+	ErrorMsg   string
+	StartOrder int
 }
 
 // ModuleRegistry manages the registry of discovered and running modules
@@ -123,7 +123,11 @@ func (mr *ModuleRegistry) GetModulesByStatus(status ModuleStatus) []*RegisteredM
 }
 
 // UpdateModuleStatus updates the status of a module
-func (mr *ModuleRegistry) UpdateModuleStatus(id string, status ModuleStatus, errorMsg string) error {
+func (mr *ModuleRegistry) UpdateModuleStatus(
+	id string,
+	status ModuleStatus,
+	errorMsg string,
+) error {
 	mr.mutex.Lock()
 	defer mr.mutex.Unlock()
 
@@ -162,7 +166,7 @@ func (mr *ModuleRegistry) CalculateStartOrder() error {
 	// Build dependency graph
 	graph := make(map[string][]string)
 	inDegree := make(map[string]int)
-	
+
 	// Initialize graph and in-degree count
 	for id := range mr.modules {
 		graph[id] = []string{}
@@ -177,7 +181,7 @@ func (mr *ModuleRegistry) CalculateStartOrder() error {
 			if depID == "" {
 				return fmt.Errorf("dependency %s not found for module %s", dep, id)
 			}
-			
+
 			graph[depID] = append(graph[depID], id)
 			inDegree[id]++
 		}
@@ -195,10 +199,10 @@ func (mr *ModuleRegistry) CalculateStartOrder() error {
 	for len(queue) > 0 {
 		current := queue[0]
 		queue = queue[1:]
-		
+
 		mr.modules[current].StartOrder = order
 		order++
-		
+
 		// Process dependencies
 		for _, neighbor := range graph[current] {
 			inDegree[neighbor]--
