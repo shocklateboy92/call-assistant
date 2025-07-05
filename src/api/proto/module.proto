@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package universal.module;
 
-option go_package = "github.com/universal/api/proto/module";
+option go_package = "github.com/universal/src/api/proto/module";
 
 import "common.proto";
 import "events.proto";
