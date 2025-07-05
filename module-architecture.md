@@ -134,6 +134,59 @@ A **module** is an **independent process** that provides one or more **entities*
 - **chromecast module**: Expert at casting to Chromecast devices  
 - **onvif-discovery module**: Expert at discovering IP cameras on the network
 
+## What is a Service?
+
+### Conceptual Definition
+
+A **service** is a **shared capability** that provides common functionality to multiple modules and the orchestrator. Services handle cross-cutting concerns and shared infrastructure:
+
+- **config service**: Centralized configuration management for all modules
+- **web UI service**: Dashboard and control interface for the entire system
+
+### Services vs Modules
+
+| Aspect | **Services** | **Modules** |
+|--------|-------------|-------------|
+| **Purpose** | Cross-cutting concerns, shared infrastructure | Domain-specific entity management |
+| **Consumers** | Multiple modules + orchestrator | Only orchestrator |
+| **Execution** | In-process with orchestrator (migration-ready) | Separate processes |
+| **Examples** | Config, Web UI | go2rtc, Matrix, Chromecast |
+| **Communication** | Direct function calls (in-process) | gRPC (across processes) |
+| **Lifecycle** | Managed by orchestrator startup | Managed by orchestrator discovery |
+
+### Service Architecture
+
+**In-Process Design (Current):**
+- Services run within the orchestrator process
+- Share the same gRPC port as the orchestrator
+- Direct function calls for maximum performance
+- Single deployment unit
+
+**Migration-Ready Design:**
+- Each service has its own proto definitions
+- Business logic is process-agnostic
+- Can be moved to separate processes when scaling demands it
+- Same service implementation works both in-process and remote
+
+### Service Responsibilities
+
+**1. Cross-Cutting Functionality:**
+Services provide shared capabilities that multiple modules need:
+
+- **Config Service**: "Store/retrieve configuration values for any module"
+- **Web UI Service**: "Provide dashboard interface for all system components"
+
+**2. Shared Infrastructure:**
+Services manage common resources and provide unified interfaces:
+- **Centralized Configuration**: Single source of truth for all settings
+- **User Interface**: Unified control plane for the entire system
+
+**3. Migration Flexibility:**
+Services are designed to be moved to separate processes when needed:
+- **In-Process**: Direct function calls for maximum performance
+- **Remote**: gRPC calls when scaling or isolation is required
+- **Hybrid**: Mix of in-process and remote based on requirements
+
 ### Module Responsibilities
 
 **1. Entity Provision:**
@@ -167,6 +220,7 @@ Modules bridge between the orchestrator's abstract entity model and real-world s
 - **Orchestrator ↔ Module**: gRPC for control plane (entity management, configuration)
 - **Module ↔ External Systems**: Native protocols (HTTP, Matrix, Cast protocol, etc.)
 - **Module ↔ Module**: Never directly - always coordinated through orchestrator
+- **Module ↔ Service**: gRPC calls to orchestrator (services share orchestrator's gRPC port)
 
 **Resource Management:**
 - Modules manage their own external dependencies (processes, client connections)

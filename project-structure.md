@@ -23,7 +23,21 @@ call-assistant/
 │   └── proto/
 │       ├── module.proto
 │       ├── entity.proto
-│       └── pipeline.proto
+│       ├── pipeline.proto
+│       └── services/           # In-process services (can be used by modules)
+│           ├── config.proto
+│           └── webui.proto
+├── services/                   # In-process services (can be used by modules)
+│   ├── config/
+│   │   ├── service.go          # Business logic
+│   │   ├── server.go           # gRPC server implementation
+│   │   ├── client.go           # In-process client wrapper
+│   │   └── main.go             # Future: separate process entry point
+│   └── webui/
+│       ├── service.go
+│       ├── server.go
+│       ├── client.go
+│       └── main.go
 ├── modules/                    # Multi-language modules (shared parent)
 │   ├── go2rtc/
 │   │   ├── module.yaml
