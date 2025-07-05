@@ -67,7 +67,6 @@ func (md *ModuleDiscovery) DiscoverModules() ([]DiscoveredModule, error) {
 
 		return nil
 	})
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to walk modules directory: %w", err)
 	}
@@ -116,15 +115,15 @@ func (md *ModuleDiscovery) parseModuleManifest(manifestPath string) (DiscoveredM
 func (md *ModuleDiscovery) generateModuleID(name, path string) string {
 	// Use the last directory name as part of the ID for uniqueness
 	dirName := filepath.Base(path)
-	
+
 	// Clean the name to make it a valid ID
 	id := strings.ToLower(strings.ReplaceAll(name, " ", "_"))
-	
+
 	// If the directory name is different from the cleaned name, append it
 	if dirName != id {
 		id = fmt.Sprintf("%s_%s", id, dirName)
 	}
-	
+
 	return id
 }
 

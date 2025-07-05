@@ -80,9 +80,27 @@ func runOrchestrator(ctx context.Context, modulesDir string, devMode bool, verbo
 
 	slog.Info("Module discovery completed", "count", len(modules))
 	for _, module := range modules {
-		slog.Info("Discovered module", "name", module.Manifest.Name, "version", module.Manifest.Version, "description", module.Manifest.Description)
+		slog.Info(
+			"Discovered module",
+			"name",
+			module.Manifest.Name,
+			"version",
+			module.Manifest.Version,
+			"description",
+			module.Manifest.Description,
+		)
 		if verbose {
-			slog.Debug("Module details", "path", module.Path, "command", module.Manifest.Command, "dev_command", module.Manifest.DevCommand, "dependencies", module.Manifest.Dependencies)
+			slog.Debug(
+				"Module details",
+				"path",
+				module.Path,
+				"command",
+				module.Manifest.Command,
+				"dev_command",
+				module.Manifest.DevCommand,
+				"dependencies",
+				module.Manifest.Dependencies,
+			)
 		}
 	}
 
@@ -164,31 +182,31 @@ func monitorModuleStatus(ctx context.Context, registry *internal.ModuleRegistry,
 
 func printModuleStatus(registry *internal.ModuleRegistry) {
 	allModules := registry.GetAllModules()
-	
+
 	slog.Info("Module Status Report")
-	
+
 	statusCounts := make(map[internal.ModuleStatus]int)
-	
+
 	for _, module := range allModules {
 		statusCounts[module.Status]++
-		
+
 		logAttrs := []any{
 			"module_id", module.Module.ID,
 			"status", module.Status,
 		}
-		
+
 		if module.GRPCPort > 0 {
 			logAttrs = append(logAttrs, "port", module.GRPCPort)
 		}
-		
+
 		if module.ProcessID > 0 {
 			logAttrs = append(logAttrs, "pid", module.ProcessID)
 		}
-		
+
 		if module.ErrorMsg != "" {
 			logAttrs = append(logAttrs, "error", module.ErrorMsg)
 		}
-		
+
 		switch module.Status {
 		case internal.ModuleStatusError:
 			slog.Error("Module status", logAttrs...)
@@ -198,7 +216,7 @@ func printModuleStatus(registry *internal.ModuleRegistry) {
 			slog.Debug("Module status", logAttrs...)
 		}
 	}
-	
+
 	logAttrs := []any{"total", len(allModules)}
 	for status, count := range statusCounts {
 		if count > 0 {
