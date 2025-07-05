@@ -2,7 +2,7 @@
 
 set -e
 
-echo "Setting up Universal Call Assistant development environment..."
+echo "Setting up Call Assistant development environment..."
 
 # Install Go protobuf plugins
 echo "Installing Go protobuf plugins..."

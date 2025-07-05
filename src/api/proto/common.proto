@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package universal.common;
 
-option go_package = "github.com/universal/src/api/proto/common";
+option go_package = "github.com/shocklateboy92/call-assistant/src/api/proto/common";
 
 import "google/protobuf/timestamp.proto";
 
