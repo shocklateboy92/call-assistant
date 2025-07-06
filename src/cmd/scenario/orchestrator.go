@@ -14,6 +14,8 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	orchestratorpb "github.com/shocklateboy92/call-assistant/src/api/proto/orchestrator"
+	commonpb "github.com/shocklateboy92/call-assistant/src/api/proto/common"
+	configpb "github.com/shocklateboy92/call-assistant/src/generated/go/services"
 )
 
 func TestOrchestratorService() error {
@@ -156,8 +158,32 @@ func TestOrchestratorService() error {
 		fmt.Println()
 	}
 
-	// Step 6: Subscribe to events for a few seconds
-	fmt.Println("Step 6: Subscribing to events for 3 seconds...")
+	// Step 6: Configure dummy module with test user credentials
+	fmt.Printf("Step 6: Configuring dummy module with %s credentials...\n", Users[0])
+	fmt.Println("───────────────────────────────────────────────────────────────")
+	
+	// Find the dummy module
+	var dummyModule *commonpb.ModuleInfo
+	for _, module := range listResp.Modules {
+		if module.Id == "dummy" {
+			dummyModule = module
+			break
+		}
+	}
+	
+	if dummyModule != nil {
+		err := configureDummyModule(dummyModule.GrpcAddress)
+		if err != nil {
+			slog.Error("Failed to configure dummy module", "error", err)
+		} else {
+			fmt.Printf("✅ Dummy module configured successfully with %s credentials\n", Users[0])
+		}
+	} else {
+		fmt.Println("❌ Dummy module not found")
+	}
+
+	// Step 7: Subscribe to events for a few seconds
+	fmt.Println("Step 7: Subscribing to events for 3 seconds...")
 	fmt.Println("───────────────────────────────────────────────────────────────")
 
 	ctx, cancel = context.WithTimeout(context.Background(), 3*time.Second)
@@ -191,5 +217,70 @@ func TestOrchestratorService() error {
 	fmt.Println("\n🎉 Orchestrator service test completed successfully!")
 	fmt.Println("═══════════════════════════════════════════════════════════════")
 
+	return nil
+}
+
+func configureDummyModule(grpcAddress string) error {
+	// Connect to the dummy module directly
+	conn, err := grpc.NewClient(
+		grpcAddress,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to connect to dummy module: %w", err)
+	}
+	defer conn.Close()
+
+	client := configpb.NewConfigurableModuleServiceClient(conn)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// First, get the current config schema
+	fmt.Println("  Getting config schema...")
+	schemaResp, err := client.GetConfigSchema(ctx, &emptypb.Empty{})
+	if err != nil {
+		return fmt.Errorf("failed to get config schema: %w", err)
+	}
+	
+	if !schemaResp.Success {
+		return fmt.Errorf("get config schema failed: %s", schemaResp.ErrorMessage)
+	}
+	
+	fmt.Printf("  Schema version: %s\n", schemaResp.Schema.SchemaVersion)
+	
+	// Apply alice credentials
+	fmt.Printf("  Applying %s credentials...\n", Users[0])
+	config := fmt.Sprintf(`{
+		"username": "%s",
+		"password": "%s"
+	}`, Users[0], TestPassword)
+	
+	applyResp, err := client.ApplyConfig(ctx, &configpb.ApplyConfigRequest{
+		ConfigJson:    config,
+		ConfigVersion: "1.0.0",
+	})
+	if err != nil {
+		return fmt.Errorf("failed to apply config: %w", err)
+	}
+	
+	if !applyResp.Success {
+		return fmt.Errorf("apply config failed: %s", applyResp.ErrorMessage)
+	}
+	
+	fmt.Printf("  Applied config version: %s\n", applyResp.AppliedConfigVersion)
+	
+	// Verify the configuration was applied
+	fmt.Println("  Verifying configuration...")
+	getCurrentResp, err := client.GetCurrentConfig(ctx, &emptypb.Empty{})
+	if err != nil {
+		return fmt.Errorf("failed to get current config: %w", err)
+	}
+	
+	if !getCurrentResp.Success {
+		return fmt.Errorf("get current config failed: %s", getCurrentResp.ErrorMessage)
+	}
+	
+	fmt.Printf("  Current config: %s\n", getCurrentResp.ConfigJson)
+	
 	return nil
 }
