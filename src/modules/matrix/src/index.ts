@@ -25,6 +25,8 @@ import {
   ListEntitiesRequest,
   ListEntitiesResponse,
   Protocol,
+  GetEntityStatusRequest,
+  GetEntityStatusResponse,
 } from "call-assistant-protos/entities";
 import type { CallContext } from "nice-grpc-common";
 import { JSONSchemaType } from "ajv";
@@ -400,6 +402,40 @@ class MatrixModule
         media_sinks: [],
         protocols: [],
         converters: [],
+      };
+    }
+  }
+
+  async getEntityStatus(
+    request: GetEntityStatusRequest,
+    context: CallContext
+  ): Promise<GetEntityStatusResponse> {
+    console.log("[Matrix Module] GetEntityStatus called for:", request.entity_id);
+
+    try {
+      // Check if we have a matrix protocol and it matches the requested entity
+      if (this.matrixProtocol && this.matrixProtocol.id === request.entity_id) {
+        return {
+          success: true,
+          error_message: "",
+          status: this.matrixProtocol.status,
+        };
+      }
+
+      // Entity not found
+      return {
+        success: false,
+        error_message: `Entity not found: ${request.entity_id}`,
+        status: undefined,
+      };
+    } catch (error) {
+      console.error("[Matrix Module] Error getting entity status:", error);
+      return {
+        success: false,
+        error_message: `Failed to get entity status: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+        status: undefined,
       };
     }
   }

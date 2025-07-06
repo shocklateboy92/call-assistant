@@ -15,8 +15,31 @@ service ModuleService {
   // Shutdown is called to gracefully stop the module
   rpc Shutdown(ShutdownRequest) returns (ShutdownResponse);
   
-  // ListEntities enumerates active entities
+  // Entity queries
+  rpc GetEntityStatus(call_assistant.entities.GetEntityStatusRequest) returns (call_assistant.entities.GetEntityStatusResponse);
   rpc ListEntities(call_assistant.entities.ListEntitiesRequest) returns (call_assistant.entities.ListEntitiesResponse);
+}
+
+
+// PipelineService is implemented by each module to handle pipeline operations
+service PipelineService {
+  // Connect entities within this module's domain
+  rpc ConnectEntities(ConnectEntitiesRequest) returns (ConnectEntitiesResponse);
+  
+  // Disconnect entities
+  rpc DisconnectEntities(DisconnectEntitiesRequest) returns (DisconnectEntitiesResponse);
+  
+  // Start media flow
+  rpc StartFlow(StartFlowRequest) returns (StartFlowResponse);
+  
+  // Stop media flow
+  rpc StopFlow(StopFlowRequest) returns (StopFlowResponse);
+  
+  // Get flow status
+  rpc GetFlowStatus(GetFlowStatusRequest) returns (GetFlowStatusResponse);
+  
+  // Adjust quality dynamically
+  rpc AdjustQuality(AdjustQualityRequest) returns (AdjustQualityResponse);
 }
 
 
@@ -50,6 +73,74 @@ message ShutdownRequest {
 message ShutdownResponse {
   bool success = 1;
   string error_message = 2;
+}
+
+// Pipeline operation messages
+message ConnectEntitiesRequest {
+  string source_entity_id = 1;
+  string target_entity_id = 2;
+  call_assistant.entities.MediaType media_type = 3;
+  call_assistant.entities.QualityProfile quality = 4;
+  map<string, string> connection_config = 5;
+}
+
+message ConnectEntitiesResponse {
+  bool success = 1;
+  string error_message = 2;
+  call_assistant.entities.Connection connection = 3;
+}
+
+message DisconnectEntitiesRequest {
+  string connection_id = 1;
+  bool force = 2;
+}
+
+message DisconnectEntitiesResponse {
+  bool success = 1;
+  string error_message = 2;
+}
+
+message StartFlowRequest {
+  string connection_id = 1;
+  map<string, string> runtime_config = 2;
+}
+
+message StartFlowResponse {
+  bool success = 1;
+  string error_message = 2;
+  call_assistant.entities.ConnectionStatus status = 3;
+}
+
+message StopFlowRequest {
+  string connection_id = 1;
+  bool force = 2;
+}
+
+message StopFlowResponse {
+  bool success = 1;
+  string error_message = 2;
+  call_assistant.entities.ConnectionStatus status = 3;
+}
+
+message GetFlowStatusRequest {
+  string connection_id = 1;
+}
+
+message GetFlowStatusResponse {
+  bool success = 1;
+  string error_message = 2;
+  call_assistant.entities.Connection connection = 3;
+}
+
+message AdjustQualityRequest {
+  string connection_id = 1;
+  call_assistant.entities.QualityProfile new_quality = 2;
+}
+
+message AdjustQualityResponse {
+  bool success = 1;
+  string error_message = 2;
+  call_assistant.entities.Connection updated_connection = 3;
 }
 
 

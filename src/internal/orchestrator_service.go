@@ -11,16 +11,20 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	commonpb "github.com/shocklateboy92/call-assistant/src/api/proto/common"
+	entitiespb "github.com/shocklateboy92/call-assistant/src/api/proto/entities"
 	eventspb "github.com/shocklateboy92/call-assistant/src/api/proto/events"
 	orchestratorpb "github.com/shocklateboy92/call-assistant/src/api/proto/orchestrator"
+	pipelinepb "github.com/shocklateboy92/call-assistant/src/api/proto/pipeline"
 )
 
 // OrchestratorService implements the gRPC OrchestratorService and EventService
 type OrchestratorService struct {
 	orchestratorpb.UnimplementedOrchestratorServiceServer
 	eventspb.UnimplementedEventServiceServer
-	registry *ModuleRegistry
-	manager  *ModuleManager
+	registry        *ModuleRegistry
+	manager         *ModuleManager
+	mediaGraph      *MediaGraphManager
+	pipelineManager *PipelineManager
 
 	// Event streaming
 	eventStreamsMu sync.RWMutex
@@ -34,13 +38,15 @@ type OrchestratorService struct {
 }
 
 // NewOrchestratorService creates a new orchestrator service
-func NewOrchestratorService(registry *ModuleRegistry, manager *ModuleManager) *OrchestratorService {
+func NewOrchestratorService(registry *ModuleRegistry, manager *ModuleManager, mediaGraph *MediaGraphManager, pipelineManager *PipelineManager) *OrchestratorService {
 	return &OrchestratorService{
-		registry:       registry,
-		manager:        manager,
-		eventStreams:   make(map[string]chan *eventspb.Event),
-		statusStreams:  make(map[string]chan *commonpb.StatusUpdate),
-		metricsStreams: make(map[string]chan *commonpb.Metrics),
+		registry:        registry,
+		manager:         manager,
+		mediaGraph:      mediaGraph,
+		pipelineManager: pipelineManager,
+		eventStreams:    make(map[string]chan *eventspb.Event),
+		statusStreams:   make(map[string]chan *commonpb.StatusUpdate),
+		metricsStreams:  make(map[string]chan *commonpb.Metrics),
 	}
 }
 
@@ -416,4 +422,112 @@ func (s *OrchestratorService) ReportMetrics(
 	return &eventspb.ReportMetricsResponse{
 		Success: true,
 	}, nil
+}
+
+// Entity management methods
+
+// ListEntities returns all entities from all modules
+func (s *OrchestratorService) ListEntities(
+	ctx context.Context,
+	req *entitiespb.ListEntitiesRequest,
+) (*entitiespb.ListEntitiesResponse, error) {
+	return s.mediaGraph.ListEntities(req.EntityTypeFilter, req.StateFilter)
+}
+
+// GetEntityStatus returns the status of a specific entity
+func (s *OrchestratorService) GetEntityStatus(
+	ctx context.Context,
+	req *entitiespb.GetEntityStatusRequest,
+) (*entitiespb.GetEntityStatusResponse, error) {
+	return s.mediaGraph.GetEntityStatus(req.EntityId)
+}
+
+// GetMediaGraph returns the current media graph
+func (s *OrchestratorService) GetMediaGraph(
+	ctx context.Context,
+	req *pipelinepb.GetMediaGraphRequest,
+) (*pipelinepb.GetMediaGraphResponse, error) {
+	graph, err := s.mediaGraph.GetMediaGraph(req.IncludePipelines, req.IncludeInactiveEntities)
+	if err != nil {
+		return &pipelinepb.GetMediaGraphResponse{
+			Success:      false,
+			ErrorMessage: err.Error(),
+			Graph:        nil,
+		}, nil
+	}
+
+	return &pipelinepb.GetMediaGraphResponse{
+		Success: true,
+		Graph:   graph,
+	}, nil
+}
+
+// Pipeline management methods
+
+// CreatePipeline creates a new pipeline
+func (s *OrchestratorService) CreatePipeline(
+	ctx context.Context,
+	req *pipelinepb.CreatePipelineRequest,
+) (*pipelinepb.CreatePipelineResponse, error) {
+	return s.pipelineManager.CreatePipeline(req)
+}
+
+// StartPipeline starts a pipeline
+func (s *OrchestratorService) StartPipeline(
+	ctx context.Context,
+	req *pipelinepb.StartPipelineRequest,
+) (*pipelinepb.StartPipelineResponse, error) {
+	return s.pipelineManager.StartPipeline(req)
+}
+
+// StopPipeline stops a pipeline
+func (s *OrchestratorService) StopPipeline(
+	ctx context.Context,
+	req *pipelinepb.StopPipelineRequest,
+) (*pipelinepb.StopPipelineResponse, error) {
+	return s.pipelineManager.StopPipeline(req)
+}
+
+// DeletePipeline deletes a pipeline
+func (s *OrchestratorService) DeletePipeline(
+	ctx context.Context,
+	req *pipelinepb.DeletePipelineRequest,
+) (*pipelinepb.DeletePipelineResponse, error) {
+	return s.pipelineManager.DeletePipeline(req)
+}
+
+// GetPipelineStatus returns the status of a specific pipeline
+func (s *OrchestratorService) GetPipelineStatus(
+	ctx context.Context,
+	req *pipelinepb.GetPipelineStatusRequest,
+) (*pipelinepb.GetPipelineStatusResponse, error) {
+	return s.pipelineManager.GetPipelineStatus(req)
+}
+
+// ListPipelines returns all pipelines
+func (s *OrchestratorService) ListPipelines(
+	ctx context.Context,
+	req *pipelinepb.ListPipelinesRequest,
+) (*pipelinepb.ListPipelinesResponse, error) {
+	return s.pipelineManager.ListPipelines(req)
+}
+
+// AdjustQuality adjusts the quality of a pipeline connection
+func (s *OrchestratorService) AdjustQuality(
+	ctx context.Context,
+	req *pipelinepb.AdjustQualityRequest,
+) (*pipelinepb.AdjustQualityResponse, error) {
+	// TODO: Implement quality adjustment
+	return &pipelinepb.AdjustQualityResponse{
+		Success:      false,
+		ErrorMessage: "Quality adjustment not yet implemented",
+	}, nil
+}
+
+// CalculatePath calculates an optimal path between entities
+func (s *OrchestratorService) CalculatePath(
+	ctx context.Context,
+	req *pipelinepb.CalculatePathRequest,
+) (*pipelinepb.CalculatePathResponse, error) {
+	return s.pipelineManager.CalculatePath(req)
 }
