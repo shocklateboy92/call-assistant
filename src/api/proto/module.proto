@@ -10,10 +10,6 @@ import "google/protobuf/empty.proto";
 
 // ModuleService is implemented by each module to handle lifecycle management
 service ModuleService {
-  // RegisterModule is called by the orchestrator during module startup
-  // The module responds with its capabilities and initial status
-  rpc RegisterModule(RegisterModuleRequest) returns (RegisterModuleResponse);
-  
   // HealthCheck is called periodically by the orchestrator to monitor module health
   rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
   
@@ -36,17 +32,6 @@ service EventService {
   rpc ReportMetrics(ReportMetricsRequest) returns (ReportMetricsResponse);
 }
 
-// Module registration messages
-message RegisterModuleRequest {
-  string module_id = 1;
-  string orchestrator_address = 2; // Address of orchestrator's EventService
-}
-
-message RegisterModuleResponse {
-  call_assistant.common.ModuleInfo module_info = 1;
-  bool success = 2;
-  string error_message = 3;
-}
 
 // Health check messages
 message HealthCheckRequest {
