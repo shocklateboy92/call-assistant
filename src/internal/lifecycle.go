@@ -112,6 +112,7 @@ func (mm *ModuleManager) StartModule(ctx context.Context, moduleID string, isDev
 	// Set environment variables
 	cmd.Env = os.Environ()
 	cmd.Env = append(cmd.Env, fmt.Sprintf("GRPC_PORT=%d", port))
+	cmd.Env = append(cmd.Env, fmt.Sprintf("EVENT_SERVICE_ADDRESS=localhost:%d", port))
 
 	// Redirect output for logging
 	cmd.Stdout = &moduleLogger{moduleID: moduleID, prefix: "OUT"}

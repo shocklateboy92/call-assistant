@@ -15,9 +15,10 @@ import (
 	orchestratorpb "github.com/shocklateboy92/call-assistant/src/api/proto/orchestrator"
 )
 
-// OrchestratorService implements the gRPC OrchestratorService
+// OrchestratorService implements the gRPC OrchestratorService and EventService
 type OrchestratorService struct {
 	orchestratorpb.UnimplementedOrchestratorServiceServer
+	eventspb.UnimplementedEventServiceServer
 	registry *ModuleRegistry
 	manager  *ModuleManager
 
@@ -52,6 +53,7 @@ func (s *OrchestratorService) StartGRPCServer(ctx context.Context, port int) err
 
 	grpcServer := grpc.NewServer()
 	orchestratorpb.RegisterOrchestratorServiceServer(grpcServer, s)
+	eventspb.RegisterEventServiceServer(grpcServer, s)
 
 	slog.Info("Starting orchestrator gRPC server", "port", port)
 
@@ -280,7 +282,6 @@ func (s *OrchestratorService) SubscribeToMetrics(
 	}
 }
 
-
 // BroadcastEvent sends an event to all subscribed event streams
 func (s *OrchestratorService) BroadcastEvent(event *eventspb.Event) {
 	s.eventStreamsMu.RLock()
@@ -327,4 +328,92 @@ func (s *OrchestratorService) BroadcastMetrics(metrics *commonpb.Metrics) {
 			slog.Warn("Metrics stream buffer full, dropping metrics", "stream_id", streamID)
 		}
 	}
+}
+
+// EventService implementation - methods for modules to report events
+
+// ReportEvent handles event reports from modules
+func (s *OrchestratorService) ReportEvent(
+	ctx context.Context,
+	req *eventspb.ReportEventRequest,
+) (*eventspb.ReportEventResponse, error) {
+	if req.Event == nil {
+		return &eventspb.ReportEventResponse{
+			Success:      false,
+			ErrorMessage: "Event is required",
+		}, nil
+	}
+
+	// Log the event
+	slog.Info("Received event from module",
+		"module_id", req.Event.SourceModuleId,
+		"event_id", req.Event.Id,
+		"severity", req.Event.Severity,
+	)
+
+	// Broadcast the event to all subscribed streams
+	s.BroadcastEvent(req.Event)
+
+	return &eventspb.ReportEventResponse{
+		Success: true,
+	}, nil
+}
+
+// ReportStatus handles status update reports from modules
+func (s *OrchestratorService) ReportStatus(
+	ctx context.Context,
+	req *eventspb.ReportStatusRequest,
+) (*eventspb.ReportStatusResponse, error) {
+	if req.StatusUpdate == nil {
+		return &eventspb.ReportStatusResponse{
+			Success:      false,
+			ErrorMessage: "Status update is required",
+		}, nil
+	}
+
+	// Log the status update
+	slog.Info("Received status update from module",
+		"module_id", req.StatusUpdate.ModuleId,
+		"state", req.StatusUpdate.ModuleStatus.State,
+		"health", req.StatusUpdate.ModuleStatus.Health,
+	)
+
+	// Update the registry with the new status
+	if module, exists := s.registry.GetModule(req.StatusUpdate.ModuleId); exists {
+		module.Status = req.StatusUpdate.ModuleStatus.State
+		module.ErrorMsg = req.StatusUpdate.ModuleStatus.ErrorMessage
+	}
+
+	// Broadcast the status update to all subscribed streams
+	s.BroadcastStatusUpdate(req.StatusUpdate)
+
+	return &eventspb.ReportStatusResponse{
+		Success: true,
+	}, nil
+}
+
+// ReportMetrics handles metrics reports from modules
+func (s *OrchestratorService) ReportMetrics(
+	ctx context.Context,
+	req *eventspb.ReportMetricsRequest,
+) (*eventspb.ReportMetricsResponse, error) {
+	if req.Metrics == nil {
+		return &eventspb.ReportMetricsResponse{
+			Success:      false,
+			ErrorMessage: "Metrics are required",
+		}, nil
+	}
+
+	// Log the metrics
+	slog.Debug("Received metrics from module",
+		"module_id", req.Metrics.ModuleId,
+		"metric_count", len(req.Metrics.Metrics),
+	)
+
+	// Broadcast the metrics to all subscribed streams
+	s.BroadcastMetrics(req.Metrics)
+
+	return &eventspb.ReportMetricsResponse{
+		Success: true,
+	}, nil
 }
