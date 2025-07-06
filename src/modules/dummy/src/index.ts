@@ -20,8 +20,6 @@ import {
   StopFlowResponse,
   GetFlowStatusRequest,
   GetFlowStatusResponse,
-  AdjustQualityRequest,
-  AdjustQualityResponse,
 } from "call-assistant-protos/module";
 import {
   ConfigurableModuleServiceImplementation,
@@ -829,73 +827,6 @@ class DummyModule
         success: false,
         error_message: `Failed to get flow status: ${error instanceof Error ? error.message : String(error)}`,
         connection: undefined,
-      };
-    }
-  }
-
-  async adjustQuality(
-    request: AdjustQualityRequest,
-    context: CallContext
-  ): Promise<AdjustQualityResponse> {
-    console.log(`[Dummy Module] AdjustQuality called: ${request.connection_id}`);
-
-    try {
-      const connection = this.connections.get(request.connection_id);
-      if (!connection) {
-        return {
-          success: false,
-          error_message: `Connection not found: ${request.connection_id}`,
-          updated_connection: undefined,
-        };
-      }
-
-      // Update quality settings
-      if (request.new_quality) {
-        connection.quality = request.new_quality;
-        
-        // If flow is active, restart with new settings
-        if (connection.interval && request.new_quality.framerate) {
-          clearInterval(connection.interval);
-          
-          const transferRate = request.new_quality.framerate;
-          connection.interval = setInterval(() => {
-            connection.framesSent++;
-            connection.bytesTransferred += Math.floor((request.new_quality?.bitrate || 1000000) / 8 / transferRate);
-            
-            const sink = this.testSinks.get(connection.targetEntityId);
-            if (sink) {
-              this.simulateFrameReceived(sink);
-            }
-          }, 1000 / transferRate);
-        }
-      }
-
-      const connectionResponse: Connection = {
-        id: connection.id,
-        source_entity_id: connection.sourceEntityId,
-        target_entity_id: connection.targetEntityId,
-        media_type: connection.mediaType,
-        transport_protocol: "synthetic",
-        quality: connection.quality,
-        status: connection.status,
-        metrics: {
-          frames_sent: { value: { $case: "int_value", int_value: connection.framesSent } },
-          bytes_transferred: { value: { $case: "int_value", int_value: connection.bytesTransferred } },
-        },
-      };
-
-      console.log(`[Dummy Module] Adjusted quality for: ${request.connection_id}`);
-      return {
-        success: true,
-        error_message: "",
-        updated_connection: connectionResponse,
-      };
-    } catch (error) {
-      console.error("[Dummy Module] Error adjusting quality:", error);
-      return {
-        success: false,
-        error_message: `Failed to adjust quality: ${error instanceof Error ? error.message : String(error)}`,
-        updated_connection: undefined,
       };
     }
   }

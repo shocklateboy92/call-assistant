@@ -32,7 +32,6 @@ service OrchestratorService {
   rpc DeletePipeline(call_assistant.pipeline.DeletePipelineRequest) returns (call_assistant.pipeline.DeletePipelineResponse);
   rpc GetPipelineStatus(call_assistant.pipeline.GetPipelineStatusRequest) returns (call_assistant.pipeline.GetPipelineStatusResponse);
   rpc ListPipelines(call_assistant.pipeline.ListPipelinesRequest) returns (call_assistant.pipeline.ListPipelinesResponse);
-  rpc AdjustQuality(call_assistant.pipeline.AdjustQualityRequest) returns (call_assistant.pipeline.AdjustQualityResponse);
   rpc CalculatePath(call_assistant.pipeline.CalculatePathRequest) returns (call_assistant.pipeline.CalculatePathResponse);
   
   // Event subscription for services

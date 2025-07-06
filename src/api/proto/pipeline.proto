@@ -167,19 +167,6 @@ message DeletePipelineResponse {
   string error_message = 2;
 }
 
-// Pipeline adjustment requests
-message AdjustQualityRequest {
-  string pipeline_id = 1;
-  string connection_id = 2;                     // Specific connection to adjust
-  call_assistant.entities.QualityProfile new_quality = 3;
-}
-
-message AdjustQualityResponse {
-  bool success = 1;
-  string error_message = 2;
-  call_assistant.entities.Connection updated_connection = 3;
-}
-
 // Graph management
 message GetMediaGraphRequest {
   bool include_pipelines = 1;
@@ -211,9 +198,6 @@ service PipelineService {
   // Pipeline queries
   rpc GetPipelineStatus(GetPipelineStatusRequest) returns (GetPipelineStatusResponse);
   rpc ListPipelines(ListPipelinesRequest) returns (ListPipelinesResponse);
-  
-  // Pipeline adjustments
-  rpc AdjustQuality(AdjustQualityRequest) returns (AdjustQualityResponse);
   
   // Graph operations
   rpc GetMediaGraph(GetMediaGraphRequest) returns (GetMediaGraphResponse);

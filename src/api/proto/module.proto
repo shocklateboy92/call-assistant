@@ -37,9 +37,6 @@ service PipelineService {
   
   // Get flow status
   rpc GetFlowStatus(GetFlowStatusRequest) returns (GetFlowStatusResponse);
-  
-  // Adjust quality dynamically
-  rpc AdjustQuality(AdjustQualityRequest) returns (AdjustQualityResponse);
 }
 
 
@@ -130,17 +127,6 @@ message GetFlowStatusResponse {
   bool success = 1;
   string error_message = 2;
   call_assistant.entities.Connection connection = 3;
-}
-
-message AdjustQualityRequest {
-  string connection_id = 1;
-  call_assistant.entities.QualityProfile new_quality = 2;
-}
-
-message AdjustQualityResponse {
-  bool success = 1;
-  string error_message = 2;
-  call_assistant.entities.Connection updated_connection = 3;
 }
 
 
