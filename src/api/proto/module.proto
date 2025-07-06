@@ -5,7 +5,6 @@ package call_assistant.module;
 option go_package = "github.com/shocklateboy92/call-assistant/src/api/proto/module";
 
 import "common.proto";
-import "events.proto";
 
 // ModuleService is implemented by each module to handle lifecycle management
 service ModuleService {
@@ -16,17 +15,6 @@ service ModuleService {
   rpc Shutdown(ShutdownRequest) returns (ShutdownResponse);
 }
 
-// EventService is implemented by the orchestrator to receive events from modules
-service EventService {
-  // ReportEvent is called by modules to send events to the orchestrator
-  rpc ReportEvent(ReportEventRequest) returns (ReportEventResponse);
-  
-  // ReportStatus is called by modules to send status updates
-  rpc ReportStatus(ReportStatusRequest) returns (ReportStatusResponse);
-  
-  // ReportMetrics is called by modules to send performance metrics
-  rpc ReportMetrics(ReportMetricsRequest) returns (ReportMetricsResponse);
-}
 
 
 // Health check messages
@@ -61,30 +49,3 @@ message ShutdownResponse {
 }
 
 
-// Event reporting messages
-message ReportEventRequest {
-  call_assistant.events.Event event = 1;
-}
-
-message ReportEventResponse {
-  bool success = 1;
-  string error_message = 2;
-}
-
-message ReportStatusRequest {
-  call_assistant.common.StatusUpdate status_update = 1;
-}
-
-message ReportStatusResponse {
-  bool success = 1;
-  string error_message = 2;
-}
-
-message ReportMetricsRequest {
-  call_assistant.common.Metrics metrics = 1;
-}
-
-message ReportMetricsResponse {
-  bool success = 1;
-  string error_message = 2;
-}
