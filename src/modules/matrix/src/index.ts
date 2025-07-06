@@ -21,15 +21,17 @@ import {
 } from "call-assistant-protos/services/config";
 import { ModuleState, HealthStatus } from "call-assistant-protos/common";
 import { Empty } from "call-assistant-protos/google/protobuf/empty";
+import {
+  ListEntitiesRequest,
+  ListEntitiesResponse,
+  Protocol,
+} from "call-assistant-protos/entities";
 import type { CallContext } from "nice-grpc-common";
 import { JSONSchemaType } from "ajv";
-import {
-  MatrixClient,
-  createClient as createMatrixClient,
-  ClientEvent,
-} from "matrix-js-sdk";
+import { createClient as createMatrixClient, ClientEvent } from "matrix-js-sdk";
+import { MatrixProtocol } from "./matrix-protocol";
 
-interface MatrixModuleConfig {
+export interface MatrixModuleConfig {
   homeserver: string;
   accessToken: string;
   userId: string;
@@ -73,7 +75,7 @@ class MatrixModule
 {
   private config?: MatrixModuleConfig;
   private configVersion: string = "1";
-  private matrixClient?: MatrixClient;
+  private matrixProtocol?: MatrixProtocol;
 
   async healthCheck(
     request: HealthCheckRequest,
@@ -82,7 +84,7 @@ class MatrixModule
     console.log("[Matrix Module] HealthCheck called");
 
     const isConfigured = this.config !== undefined;
-    const isConnected = this.matrixClient !== undefined;
+    const isConnected = this.matrixProtocol !== undefined;
 
     return {
       status: {
@@ -111,9 +113,9 @@ class MatrixModule
     };
 
     // Clean up Matrix client
-    if (this.matrixClient) {
+    if (this.matrixProtocol) {
       try {
-        this.matrixClient.stopClient();
+        this.matrixProtocol.shutdown();
         console.log("[Matrix Module] Matrix client stopped");
       } catch (error) {
         console.error("[Matrix Module] Error stopping Matrix client:", error);
@@ -164,7 +166,7 @@ class MatrixModule
 
       // Initialize Matrix client with new config
       try {
-        await this.initializeMatrixClient();
+        await this.initializeMatrixProtocol();
         console.log(
           "[Matrix Module] Configuration applied and Matrix client initialized successfully"
         );
@@ -355,7 +357,54 @@ class MatrixModule
     }
   }
 
-  private async initializeMatrixClient(): Promise<void> {
+  async listEntities(
+    request: ListEntitiesRequest,
+    context: CallContext
+  ): Promise<ListEntitiesResponse> {
+    console.log("[Matrix Module] ListEntities called");
+
+    try {
+      const protocols: Protocol[] = [];
+
+      // If we have a configured matrix protocol, include it
+      if (this.matrixProtocol) {
+        // Apply filters if specified
+        const passesTypeFilter =
+          !request.entity_type_filter ||
+          request.entity_type_filter === "protocol";
+        const passesStateFilter =
+          !request.state_filter ||
+          this.matrixProtocol.status?.state === request.state_filter;
+
+        if (passesTypeFilter && passesStateFilter) {
+          protocols.push(this.matrixProtocol);
+        }
+      }
+
+      return {
+        success: true,
+        error_message: "",
+        media_sources: [],
+        media_sinks: [],
+        protocols: protocols,
+        converters: [],
+      };
+    } catch (error) {
+      console.error("[Matrix Module] Error listing entities:", error);
+      return {
+        success: false,
+        error_message: `Failed to list entities: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+        media_sources: [],
+        media_sinks: [],
+        protocols: [],
+        converters: [],
+      };
+    }
+  }
+
+  private async initializeMatrixProtocol(): Promise<void> {
     if (!this.config) {
       throw new Error("Matrix configuration not provided");
     }
@@ -364,17 +413,17 @@ class MatrixModule
       `[Matrix Module] Initializing Matrix client for ${this.config.userId}`
     );
 
-    // Stop existing client if present
-    if (this.matrixClient) {
+    // Stop existing protocol if present
+    if (this.matrixProtocol) {
       try {
-        this.matrixClient.stopClient();
+        this.matrixProtocol.shutdown();
       } catch (error) {
         console.warn("[Matrix Module] Error stopping previous client:", error);
       }
     }
 
     // Create new Matrix client
-    this.matrixClient = createMatrixClient({
+    const matrixClient = createMatrixClient({
       baseUrl: this.config.homeserver,
       accessToken: this.config.accessToken,
       userId: this.config.userId,
@@ -382,11 +431,11 @@ class MatrixModule
     });
 
     // Set up event handlers
-    this.matrixClient.on(ClientEvent.Sync, (state: unknown) => {
+    matrixClient.on(ClientEvent.Sync, (state: unknown) => {
       console.log(`[Matrix Module] Sync state: ${JSON.stringify(state)}`);
     });
 
-    this.matrixClient.on(ClientEvent.ClientWellKnown, (wellKnown: unknown) => {
+    matrixClient.on(ClientEvent.ClientWellKnown, (wellKnown: unknown) => {
       console.log(
         `[Matrix Module] Client well-known received: ${JSON.stringify(
           wellKnown
@@ -395,7 +444,10 @@ class MatrixModule
     });
 
     // Start the Matrix client
-    await this.matrixClient.startClient();
+    await matrixClient.startClient();
+
+    // Create the protocol wrapper
+    this.matrixProtocol = new MatrixProtocol(matrixClient, this.config);
 
     console.log("[Matrix Module] Matrix client initialized successfully");
   }

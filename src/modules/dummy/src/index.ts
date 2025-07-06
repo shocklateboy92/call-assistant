@@ -21,6 +21,10 @@ import {
 } from "call-assistant-protos/services/config";
 import { ModuleState, HealthStatus } from "call-assistant-protos/common";
 import { Empty } from "call-assistant-protos/google/protobuf/empty";
+import {
+  ListEntitiesRequest,
+  ListEntitiesResponse,
+} from "call-assistant-protos/entities";
 import type { CallContext } from "nice-grpc-common";
 import { JSONSchemaType } from "ajv";
 
@@ -201,6 +205,23 @@ class DummyModule
         ],
       };
     }
+  }
+
+
+  async listEntities(
+    request: ListEntitiesRequest,
+    context: CallContext
+  ): Promise<ListEntitiesResponse> {
+    console.log("[Dummy Module] ListEntities called");
+
+    return {
+      success: true,
+      error_message: "",
+      media_sources: [],
+      media_sinks: [],
+      protocols: [],
+      converters: [],
+    };
   }
 }
 

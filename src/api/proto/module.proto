@@ -5,6 +5,7 @@ package call_assistant.module;
 option go_package = "github.com/shocklateboy92/call-assistant/src/api/proto/module";
 
 import "common.proto";
+import "entities.proto";
 
 // ModuleService is implemented by each module to handle lifecycle management
 service ModuleService {
@@ -13,6 +14,9 @@ service ModuleService {
   
   // Shutdown is called to gracefully stop the module
   rpc Shutdown(ShutdownRequest) returns (ShutdownResponse);
+  
+  // ListEntities enumerates active entities
+  rpc ListEntities(call_assistant.entities.ListEntitiesRequest) returns (call_assistant.entities.ListEntitiesResponse);
 }
 
 

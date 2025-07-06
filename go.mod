@@ -8,6 +8,7 @@ require github.com/shocklateboy92/call-assistant/src/api/proto/module v0.0.0-000
 
 require (
 	github.com/shocklateboy92/call-assistant/src/api/proto/common v0.0.0
+	github.com/shocklateboy92/call-assistant/src/api/proto/entities v0.0.0
 	github.com/shocklateboy92/call-assistant/src/api/proto/events v0.0.0
 	github.com/shocklateboy92/call-assistant/src/api/proto/orchestrator v0.0.0
 	golang.org/x/net v0.38.0 // indirect
@@ -21,6 +22,7 @@ require (
 // Local replacements for generated proto packages
 replace (
 	github.com/shocklateboy92/call-assistant/src/api/proto/common => ./src/generated/go/github.com/shocklateboy92/call-assistant/src/api/proto/common
+	github.com/shocklateboy92/call-assistant/src/api/proto/entities => ./src/generated/go/github.com/shocklateboy92/call-assistant/src/api/proto/entities
 	github.com/shocklateboy92/call-assistant/src/api/proto/events => ./src/generated/go/github.com/shocklateboy92/call-assistant/src/api/proto/events
 	github.com/shocklateboy92/call-assistant/src/api/proto/module => ./src/generated/go/github.com/shocklateboy92/call-assistant/src/api/proto/module
 	github.com/shocklateboy92/call-assistant/src/api/proto/orchestrator => ./src/generated/go/github.com/shocklateboy92/call-assistant/src/api/proto/orchestrator

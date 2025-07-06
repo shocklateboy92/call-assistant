@@ -5,3 +5,4 @@
 ## Development Instructions
 
 - Run `go run ./src/cmd/scenario` after making code changes to test everything end-to-end.
+- Run `scripts/generate-proto.sh` after making changes to proto files
