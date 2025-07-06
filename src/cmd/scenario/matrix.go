@@ -160,7 +160,8 @@ func (mc *MatrixClient) CreateUser(username, password string) error {
 
 	if resp.StatusCode == http.StatusOK {
 		var registerResp RegisterResponse
-		if err := json.Unmarshal(body, &registerResp); err == nil && registerResp.AccessToken != "" {
+		if err := json.Unmarshal(body, &registerResp); err == nil &&
+			registerResp.AccessToken != "" {
 			slog.Info("Successfully created user", "username", username)
 			return nil
 		}
@@ -170,10 +171,23 @@ func (mc *MatrixClient) CreateUser(username, password string) error {
 	var errorResp ErrorResponse
 	if err := json.Unmarshal(body, &errorResp); err == nil {
 		if errorResp.ErrCode == "M_FORBIDDEN" {
-			return fmt.Errorf("failed to create user %s: registration may be disabled. Check homeserver.yaml for enable_registration: true", username)
+			return fmt.Errorf(
+				"failed to create user %s: registration may be disabled. Check homeserver.yaml for enable_registration: true",
+				username,
+			)
 		}
-		return fmt.Errorf("failed to create user %s: %s - %s", username, errorResp.ErrCode, errorResp.Error)
+		return fmt.Errorf(
+			"failed to create user %s: %s - %s",
+			username,
+			errorResp.ErrCode,
+			errorResp.Error,
+		)
 	}
 
-	return fmt.Errorf("failed to create user %s: unexpected response (status %d): %s", username, resp.StatusCode, string(body))
+	return fmt.Errorf(
+		"failed to create user %s: unexpected response (status %d): %s",
+		username,
+		resp.StatusCode,
+		string(body),
+	)
 }

@@ -80,7 +80,10 @@ func TestOrchestratorService() error {
 
 	// Step 3: Connect to orchestrator gRPC service
 	fmt.Println("Step 3: Connecting to orchestrator service...")
-	conn, err := grpc.NewClient("localhost:9090", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(
+		"localhost:9090",
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
 	if err != nil {
 		slog.Error("Failed to connect to orchestrator", "error", err)
 		return err
@@ -133,7 +136,13 @@ func TestOrchestratorService() error {
 		}
 
 		if !infoResp.Success {
-			slog.Error("GetModuleInfo failed", "module_id", module.Id, "error", infoResp.ErrorMessage)
+			slog.Error(
+				"GetModuleInfo failed",
+				"module_id",
+				module.Id,
+				"error",
+				infoResp.ErrorMessage,
+			)
 			continue
 		}
 
