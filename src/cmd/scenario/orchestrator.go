@@ -13,11 +13,11 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/types/known/emptypb"
 
-	orchestratorpb "github.com/shocklateboy92/call-assistant/src/api/proto/orchestrator"
 	commonpb "github.com/shocklateboy92/call-assistant/src/api/proto/common"
-	configpb "github.com/shocklateboy92/call-assistant/src/generated/go/services"
-	modulepb "github.com/shocklateboy92/call-assistant/src/api/proto/module"
 	entitiespb "github.com/shocklateboy92/call-assistant/src/api/proto/entities"
+	modulepb "github.com/shocklateboy92/call-assistant/src/api/proto/module"
+	orchestratorpb "github.com/shocklateboy92/call-assistant/src/api/proto/orchestrator"
+	configpb "github.com/shocklateboy92/call-assistant/src/generated/go/services"
 )
 
 func TestOrchestratorService() error {
@@ -26,7 +26,8 @@ func TestOrchestratorService() error {
 
 	// Step 1: Start orchestrator in background
 	fmt.Println("Step 1a: Building orchestrator...")
-	cmd := exec.Command("go", "build", "--output", "./bin/", "./src/cmd/orchestrator")
+	const orchestratorPath = "./bin/orchestrator"
+	cmd := exec.Command("go", "build", "-o", orchestratorPath, "./src/cmd/orchestrator")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
@@ -35,10 +36,14 @@ func TestOrchestratorService() error {
 		return err
 	}
 
-	cmd.Wait() // Wait for build to complete
+	// Wait for build to complete
+	if err := cmd.Wait(); err != nil {
+		slog.Error("Failed to build orchestrator", "error", err)
+		return fmt.Errorf("failed to build orchestrator: %w", err)
+	}
 
 	fmt.Println("Step 1b: Starting orchestrator...")
-	cmd = exec.Command("./bin/orchestrator", "--dev", "--verbose")
+	cmd = exec.Command(orchestratorPath, "--dev", "--verbose")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
@@ -110,27 +115,27 @@ func TestOrchestratorService() error {
 	}
 
 	fmt.Printf("Found %d modules:\n", len(listResp.Modules))
-	
+
 	// Validate we have exactly 2 modules
 	if len(listResp.Modules) != 2 {
 		return fmt.Errorf("expected 2 modules, but found %d", len(listResp.Modules))
 	}
-	
+
 	// Validate we have the expected modules (dummy and matrix)
 	moduleIds := make(map[string]bool)
 	for _, module := range listResp.Modules {
 		moduleIds[module.Id] = true
 	}
-	
+
 	if !moduleIds["dummy"] {
 		return fmt.Errorf("dummy module not found")
 	}
 	if !moduleIds["matrix"] {
 		return fmt.Errorf("matrix module not found")
 	}
-	
+
 	fmt.Println("✅ Expected modules found: dummy and matrix")
-	
+
 	for i, module := range listResp.Modules {
 		fmt.Printf("  %d. %s (%s)\n", i+1, module.Name, module.Id)
 		fmt.Printf("     Version: %s\n", module.Version)
@@ -184,7 +189,7 @@ func TestOrchestratorService() error {
 	// Step 6: Configure dummy module with test user credentials
 	fmt.Printf("Step 6: Configuring dummy module with %s credentials...\n", Users[0])
 	fmt.Println("───────────────────────────────────────────────────────────────")
-	
+
 	// Find the dummy module
 	var dummyModule *commonpb.ModuleInfo
 	for _, module := range listResp.Modules {
@@ -193,13 +198,13 @@ func TestOrchestratorService() error {
 			break
 		}
 	}
-	
+
 	if dummyModule != nil {
 		dummyConfig := fmt.Sprintf(`{
 			"username": "%s",
 			"password": "%s"
 		}`, Users[0], TestPassword)
-		
+
 		err := configureModule(dummyModule.GrpcAddress, "dummy", dummyConfig)
 		if err != nil {
 			slog.Error("Failed to configure dummy module", "error", err)
@@ -213,7 +218,7 @@ func TestOrchestratorService() error {
 	// Step 6.5: Test Matrix module configuration validation
 	fmt.Println("\nStep 6.5: Testing Matrix module configuration...")
 	fmt.Println("───────────────────────────────────────────────────────────────")
-	
+
 	// Find the matrix module
 	var matrixModule *commonpb.ModuleInfo
 	for _, module := range listResp.Modules {
@@ -222,7 +227,7 @@ func TestOrchestratorService() error {
 			break
 		}
 	}
-	
+
 	if matrixModule != nil {
 		// Test with bad credentials first
 		fmt.Println("  Testing with invalid credentials...")
@@ -231,14 +236,14 @@ func TestOrchestratorService() error {
 			"accessToken": "bad_token",
 			"userId": "@%s:localhost"
 		}`, SynapseURL, Users[0])
-		
+
 		err := configureModule(matrixModule.GrpcAddress, "matrix", badConfig)
 		if err != nil {
 			fmt.Printf("✅ Matrix module correctly rejected invalid credentials: %v\n", err)
 		} else {
 			fmt.Println("❌ Matrix module should have rejected invalid credentials")
 		}
-		
+
 		// Now test with correct Alice credentials
 		fmt.Printf("  Testing with valid %s credentials...\n", Users[0])
 		aliceConfig := fmt.Sprintf(`{
@@ -246,13 +251,13 @@ func TestOrchestratorService() error {
 			"accessToken": "%s",
 			"userId": "@%s:localhost"
 		}`, SynapseURL, GetAccessToken(Users[0]), Users[0])
-		
+
 		err = configureModule(matrixModule.GrpcAddress, "matrix", aliceConfig)
 		if err != nil {
 			slog.Error("Failed to configure matrix module with valid credentials", "error", err)
 		} else {
 			fmt.Printf("✅ Matrix module configured successfully with %s credentials\n", Users[0])
-			
+
 			// Test GetCallingProtocols after successful configuration
 			fmt.Println("  Testing GetCallingProtocols...")
 			err = testGetCallingProtocols(matrixModule.GrpcAddress)
@@ -325,13 +330,13 @@ func configureModule(grpcAddress, moduleName, configJson string) error {
 	if err != nil {
 		return fmt.Errorf("failed to get config schema: %w", err)
 	}
-	
+
 	if !schemaResp.Success {
 		return fmt.Errorf("get config schema failed: %s", schemaResp.ErrorMessage)
 	}
-	
+
 	fmt.Printf("  Schema version: %s\n", schemaResp.Schema.SchemaVersion)
-	
+
 	// First validate the config
 	fmt.Println("  Validating configuration...")
 	validateResp, err := client.ValidateConfig(ctx, &configpb.ValidateConfigRequest{
@@ -340,18 +345,18 @@ func configureModule(grpcAddress, moduleName, configJson string) error {
 	if err != nil {
 		return fmt.Errorf("failed to validate config: %w", err)
 	}
-	
+
 	if !validateResp.Valid {
 		var errorDetails []string
 		for _, validationError := range validateResp.ValidationErrors {
-			errorDetails = append(errorDetails, fmt.Sprintf("%s: %s", 
+			errorDetails = append(errorDetails, fmt.Sprintf("%s: %s",
 				validationError.FieldPath, validationError.ErrorMessage))
 		}
 		return fmt.Errorf("config validation failed: %v", errorDetails)
 	}
-	
+
 	fmt.Println("  ✅ Configuration validation passed")
-	
+
 	// Apply the configuration
 	fmt.Println("  Applying configuration...")
 	applyResp, err := client.ApplyConfig(ctx, &configpb.ApplyConfigRequest{
@@ -361,26 +366,26 @@ func configureModule(grpcAddress, moduleName, configJson string) error {
 	if err != nil {
 		return fmt.Errorf("failed to apply config: %w", err)
 	}
-	
+
 	if !applyResp.Success {
 		return fmt.Errorf("apply config failed: %s", applyResp.ErrorMessage)
 	}
-	
+
 	fmt.Printf("  Applied config version: %s\n", applyResp.AppliedConfigVersion)
-	
+
 	// Verify the configuration was applied
 	fmt.Println("  Verifying configuration...")
 	getCurrentResp, err := client.GetCurrentConfig(ctx, &emptypb.Empty{})
 	if err != nil {
 		return fmt.Errorf("failed to get current config: %w", err)
 	}
-	
+
 	if !getCurrentResp.Success {
 		return fmt.Errorf("get current config failed: %s", getCurrentResp.ErrorMessage)
 	}
-	
+
 	fmt.Printf("  Current config: %s\n", getCurrentResp.ConfigJson)
-	
+
 	return nil
 }
 
@@ -406,11 +411,11 @@ func testGetCallingProtocols(grpcAddress string) error {
 	if err != nil {
 		return fmt.Errorf("failed to list entities: %w", err)
 	}
-	
+
 	if !listResp.Success {
 		return fmt.Errorf("ListEntities failed: %s", listResp.ErrorMessage)
 	}
-	
+
 	fmt.Printf("    Found %d protocol(s):\n", len(listResp.Protocols))
 	for i, protocol := range listResp.Protocols {
 		fmt.Printf("      %d. %s (%s)\n", i+1, protocol.Name, protocol.Id)
@@ -426,6 +431,6 @@ func testGetCallingProtocols(grpcAddress string) error {
 		}
 		fmt.Println()
 	}
-	
+
 	return nil
 }
