@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/shocklateboy92/call-assistant/src/internal"
+	commonpb "github.com/shocklateboy92/call-assistant/src/api/proto/common"
 )
 
 func main() {
@@ -198,7 +199,7 @@ func printModuleStatus(registry *internal.ModuleRegistry) {
 
 	slog.Info("Module Status Report")
 
-	statusCounts := make(map[internal.ModuleStatus]int)
+	statusCounts := make(map[commonpb.ModuleState]int)
 
 	for _, module := range allModules {
 		statusCounts[module.Status]++
@@ -221,9 +222,9 @@ func printModuleStatus(registry *internal.ModuleRegistry) {
 		}
 
 		switch module.Status {
-		case internal.ModuleStatusError:
+		case commonpb.ModuleState_MODULE_STATE_ERROR:
 			slog.Error("Module status", logAttrs...)
-		case internal.ModuleStatusRunning:
+		case commonpb.ModuleState_MODULE_STATE_READY:
 			slog.Info("Module status", logAttrs...)
 		default:
 			slog.Debug("Module status", logAttrs...)

@@ -10,6 +10,12 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+
+	commonpb "github.com/shocklateboy92/call-assistant/src/api/proto/common"
+	modulepb "github.com/shocklateboy92/call-assistant/src/api/proto/module"
 )
 
 // ModuleManager handles the lifecycle of modules
@@ -70,19 +76,19 @@ func (mm *ModuleManager) StartModule(ctx context.Context, moduleID string, isDev
 	}
 
 	// Check if module is already running
-	if regModule.Status == ModuleStatusRunning {
+	if regModule.Status == commonpb.ModuleState_MODULE_STATE_READY {
 		return fmt.Errorf("module %s is already running", moduleID)
 	}
 
 	// Update status to starting
-	if err := mm.registry.UpdateModuleStatus(moduleID, ModuleStatusStarting, ""); err != nil {
+	if err := mm.registry.UpdateModuleStatus(moduleID, commonpb.ModuleState_MODULE_STATE_STARTING, ""); err != nil {
 		return fmt.Errorf("failed to update module status: %w", err)
 	}
 
 	// Allocate a port for the module
 	port, err := allocatePort()
 	if err != nil {
-		mm.registry.UpdateModuleStatus(moduleID, ModuleStatusError, err.Error())
+		mm.registry.UpdateModuleStatus(moduleID, commonpb.ModuleState_MODULE_STATE_ERROR, err.Error())
 		return fmt.Errorf("failed to allocate port: %w", err)
 	}
 
@@ -95,7 +101,7 @@ func (mm *ModuleManager) StartModule(ctx context.Context, moduleID string, isDev
 	// Parse the command
 	cmdParts := strings.Fields(command)
 	if len(cmdParts) == 0 {
-		mm.registry.UpdateModuleStatus(moduleID, ModuleStatusError, "empty command")
+		mm.registry.UpdateModuleStatus(moduleID, commonpb.ModuleState_MODULE_STATE_ERROR, "empty command")
 		return fmt.Errorf("empty command for module %s", moduleID)
 	}
 
@@ -113,7 +119,7 @@ func (mm *ModuleManager) StartModule(ctx context.Context, moduleID string, isDev
 
 	// Start the process
 	if err := cmd.Start(); err != nil {
-		mm.registry.UpdateModuleStatus(moduleID, ModuleStatusError, err.Error())
+		mm.registry.UpdateModuleStatus(moduleID, commonpb.ModuleState_MODULE_STATE_ERROR, err.Error())
 		return fmt.Errorf("failed to start module process: %w", err)
 	}
 
@@ -122,30 +128,19 @@ func (mm *ModuleManager) StartModule(ctx context.Context, moduleID string, isDev
 
 	// Update registry with process information
 	if err := mm.registry.UpdateModuleProcess(moduleID, cmd.Process.Pid, port); err != nil {
-		mm.registry.UpdateModuleStatus(moduleID, ModuleStatusError, err.Error())
+		mm.registry.UpdateModuleStatus(moduleID, commonpb.ModuleState_MODULE_STATE_ERROR, err.Error())
 		return fmt.Errorf("failed to update process info: %w", err)
 	}
 
 	// Start monitoring the process
 	go mm.monitorProcess(moduleID, cmd, port)
 
-	// Wait a bit to see if the process starts successfully
-	time.Sleep(100 * time.Millisecond)
-
-	// Check if process is still running
-	if cmd.ProcessState != nil && cmd.ProcessState.Exited() {
-		exitCode := cmd.ProcessState.ExitCode()
-		mm.registry.UpdateModuleStatus(
-			moduleID,
-			ModuleStatusError,
-			fmt.Sprintf("process exited with code %d", exitCode),
-		)
-		return fmt.Errorf("module %s exited immediately with code %d", moduleID, exitCode)
-	}
-
-	// Update status to running
-	if err := mm.registry.UpdateModuleStatus(moduleID, ModuleStatusRunning, ""); err != nil {
-		return fmt.Errorf("failed to update module status: %w", err)
+	// Wait for module to be ready with connection retry and health check
+	if err := mm.waitForModuleReady(ctx, moduleID, port, 50*time.Second); err != nil {
+		// Stop the process if we can't connect
+		cmd.Process.Kill()
+		mm.registry.UpdateModuleStatus(moduleID, commonpb.ModuleState_MODULE_STATE_ERROR, err.Error())
+		return fmt.Errorf("failed to connect to module %s: %w", moduleID, err)
 	}
 
 	slog.Info(
@@ -158,6 +153,84 @@ func (mm *ModuleManager) StartModule(ctx context.Context, moduleID string, isDev
 		cmd.Process.Pid,
 	)
 	return nil
+}
+
+// waitForModuleReady waits for a module to be ready by connecting to its gRPC port
+// and performing a health check
+func (mm *ModuleManager) waitForModuleReady(
+	ctx context.Context,
+	moduleID string,
+	port int,
+	timeout time.Duration,
+) error {
+	address := fmt.Sprintf("localhost:%d", port)
+
+	// Create a context with timeout
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	// Retry connection attempts
+	ticker := time.NewTicker(200 * time.Millisecond)
+	defer ticker.Stop()
+
+	slog.Info("Waiting for module to be ready", "module_id", moduleID, "address", address)
+
+	for {
+		select {
+		case <-ctxWithTimeout.Done():
+			return fmt.Errorf("timeout waiting for module to be ready")
+		case <-ticker.C:
+			// Check if process is still running
+			if cmd, exists := mm.processes[moduleID]; exists {
+				if cmd.ProcessState != nil && cmd.ProcessState.Exited() {
+					exitCode := cmd.ProcessState.ExitCode()
+					return fmt.Errorf("process exited with code %d", exitCode)
+				}
+			}
+
+			// Try to connect to the module
+			conn, err := grpc.NewClient(address,
+				grpc.WithTransportCredentials(insecure.NewCredentials()),
+			)
+			if err != nil {
+				slog.Debug("Failed to connect to module", "module_id", moduleID, "error", err)
+				continue // Retry
+			}
+
+			// Connection successful, now perform health check
+			client := modulepb.NewModuleServiceClient(conn)
+
+			healthResp, err := client.HealthCheck(ctxWithTimeout, &modulepb.HealthCheckRequest{})
+			conn.Close()
+
+			if err != nil {
+				slog.Debug("Health check failed", "module_id", moduleID, "error", err)
+				continue // Retry
+			}
+
+			// Update module status based on health check response
+			if err := mm.updateModuleFromHealthCheck(moduleID, healthResp); err != nil {
+				return fmt.Errorf("failed to update module status: %w", err)
+			}
+
+			slog.Info("Module is ready", "module_id", moduleID, "health_status", healthResp.Status.Health)
+			return nil
+		}
+	}
+}
+
+// updateModuleFromHealthCheck updates the module's status based on the health check response
+func (mm *ModuleManager) updateModuleFromHealthCheck(moduleID string, healthResp *modulepb.HealthCheckResponse) error {
+	if healthResp.Status == nil {
+		return fmt.Errorf("health check response missing status")
+	}
+
+	// Use the protobuf status directly
+	status := healthResp.Status.State
+	errorMsg := healthResp.Status.ErrorMessage
+
+	// Update the module status in the registry
+	return mm.registry.UpdateModuleStatus(moduleID, status, errorMsg)
 }
 
 // StopModule stops a running module
@@ -196,7 +269,7 @@ func (mm *ModuleManager) StopModule(moduleID string) error {
 	}
 
 	// Update status
-	mm.registry.UpdateModuleStatus(moduleID, ModuleStatusStopped, "")
+	mm.registry.UpdateModuleStatus(moduleID, commonpb.ModuleState_MODULE_STATE_STOPPING, "")
 
 	// Remove from processes map
 	delete(mm.processes, moduleID)
@@ -207,7 +280,7 @@ func (mm *ModuleManager) StopModule(moduleID string) error {
 
 // StopAllModules stops all running modules
 func (mm *ModuleManager) StopAllModules() error {
-	modules := mm.registry.GetModulesByStatus(ModuleStatusRunning)
+	modules := mm.registry.GetModulesByStatus(commonpb.ModuleState_MODULE_STATE_READY)
 
 	for _, module := range modules {
 		if err := mm.StopModule(module.Module.ID); err != nil {
@@ -219,16 +292,16 @@ func (mm *ModuleManager) StopAllModules() error {
 }
 
 // monitorProcess monitors a module process and updates status when it exits
-func (mm *ModuleManager) monitorProcess(moduleID string, cmd *exec.Cmd, port int) {
+func (mm *ModuleManager) monitorProcess(moduleID string, cmd *exec.Cmd, _ int) {
 	// Wait for the process to exit
 	err := cmd.Wait()
 
 	// Update status based on exit condition
 	if err != nil {
-		mm.registry.UpdateModuleStatus(moduleID, ModuleStatusError, err.Error())
+		mm.registry.UpdateModuleStatus(moduleID, commonpb.ModuleState_MODULE_STATE_ERROR, err.Error())
 		slog.Error("Module exited with error", "module_id", moduleID, "error", err)
 	} else {
-		mm.registry.UpdateModuleStatus(moduleID, ModuleStatusStopped, "")
+		mm.registry.UpdateModuleStatus(moduleID, commonpb.ModuleState_MODULE_STATE_STOPPING, "")
 		slog.Info("Module exited normally", "module_id", moduleID)
 	}
 
@@ -252,14 +325,14 @@ func (ml *moduleLogger) Write(p []byte) (n int, err error) {
 
 // GetRunningModules returns the count of running modules
 func (mm *ModuleManager) GetRunningModules() int {
-	return len(mm.registry.GetModulesByStatus(ModuleStatusRunning))
+	return len(mm.registry.GetModulesByStatus(commonpb.ModuleState_MODULE_STATE_READY))
 }
 
 // GetModuleStatus returns the status of a specific module
-func (mm *ModuleManager) GetModuleStatus(moduleID string) (ModuleStatus, error) {
+func (mm *ModuleManager) GetModuleStatus(moduleID string) (commonpb.ModuleState, error) {
 	regModule, exists := mm.registry.GetModule(moduleID)
 	if !exists {
-		return ModuleStatusUnknown, fmt.Errorf("module %s not found", moduleID)
+		return commonpb.ModuleState_MODULE_STATE_UNSPECIFIED, fmt.Errorf("module %s not found", moduleID)
 	}
 	return regModule.Status, nil
 }
