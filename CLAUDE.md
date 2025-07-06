@@ -1,3 +1,7 @@
-## Development Notes
+## General Instructions
 
-- Use `Read docs/*.md` command to read documentation files for context
+- Read `docs/*.md` for context at the start of every conversation.
+
+## Development Instructions
+
+- Run `go run ./src/cmd/scenario` after making code changes to test everything end-to-end.

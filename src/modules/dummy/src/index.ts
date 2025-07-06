@@ -4,8 +4,6 @@ import { createServer } from 'nice-grpc';
 import { 
   ModuleServiceImplementation,
   ModuleServiceDefinition,
-  RegisterModuleRequest,
-  RegisterModuleResponse,
   HealthCheckRequest,
   HealthCheckResponse,
   ConfigureRequest,
@@ -25,29 +23,6 @@ class DummyModule implements ModuleServiceImplementation {
   private moduleId: string = 'dummy';
   private config: { [key: string]: string } = {};
 
-  async registerModule(
-    request: RegisterModuleRequest, 
-    context: CallContext
-  ): Promise<RegisterModuleResponse> {
-    console.log('[Dummy Module] RegisterModule called with:', request);
-    
-    return {
-      module_info: {
-        id: this.moduleId,
-        name: 'Dummy Test Module',
-        version: '1.0.0',
-        description: 'A dummy module for testing orchestrator functionality',
-        status: {
-          state: ModuleState.MODULE_STATE_READY,
-          health: HealthStatus.HEALTH_STATUS_HEALTHY,
-          error_message: '',
-          last_heartbeat: new Date(),
-        },
-      },
-      success: true,
-      error_message: '',
-    };
-  }
 
   async healthCheck(
     request: HealthCheckRequest,
@@ -118,6 +93,7 @@ class DummyModule implements ModuleServiceImplementation {
         name: 'Dummy Test Module',
         version: '1.0.0',
         description: 'A dummy module for testing orchestrator functionality',
+        grpc_address: `localhost:${process.env.GRPC_PORT || '50051'}`,
         status: {
           state: ModuleState.MODULE_STATE_READY,
           health: HealthStatus.HEALTH_STATUS_HEALTHY,
