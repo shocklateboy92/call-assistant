@@ -24,13 +24,13 @@ import { Empty } from "call-assistant-protos/google/protobuf/empty";
 import type { CallContext } from "nice-grpc-common";
 import { JSONSchemaType } from "ajv";
 
-interface DummyModuleConfig {
+interface MatrixModuleConfig {
   username: string;
   password: string;
 }
 
-// AJV will type check this schema against the DummyModuleConfig interface
-const schema: JSONSchemaType<DummyModuleConfig> = {
+// AJV will type check this schema against the MatrixModuleConfig interface
+const schema: JSONSchemaType<MatrixModuleConfig> = {
   $schema: "http://json-schema.org/draft-07/schema#",
   type: "object",
   properties: {
@@ -49,19 +49,19 @@ const schema: JSONSchemaType<DummyModuleConfig> = {
   additionalProperties: false,
 };
 
-class DummyModule
+class MatrixModule
   implements
     ModuleServiceImplementation,
     ConfigurableModuleServiceImplementation
 {
-  private config?: DummyModuleConfig;
+  private config?: MatrixModuleConfig;
   private configVersion: string = "1";
 
   async healthCheck(
     request: HealthCheckRequest,
     context: CallContext
   ): Promise<HealthCheckResponse> {
-    console.log("[Dummy Module] HealthCheck called");
+    console.log("[Matrix Module] HealthCheck called");
 
     return {
       status: {
@@ -79,7 +79,7 @@ class DummyModule
     request: ShutdownRequest,
     context: CallContext
   ): Promise<ShutdownResponse> {
-    console.log("[Dummy Module] Shutdown called with:", request);
+    console.log("[Matrix Module] Shutdown called with:", request);
 
     const response: ShutdownResponse = {
       success: true,
@@ -88,7 +88,7 @@ class DummyModule
 
     // Gracefully shutdown after sending response
     setTimeout(() => {
-      console.log("[Dummy Module] Shutting down gracefully");
+      console.log("[Matrix Module] Shutting down gracefully");
       process.exit(0);
     }, 1000);
 
@@ -99,7 +99,7 @@ class DummyModule
     request: Empty,
     context: CallContext
   ): Promise<GetConfigSchemaResponse> {
-    console.log("[Dummy Module] GetConfigSchema called");
+    console.log("[Matrix Module] GetConfigSchema called");
 
     // Basic schema for demonstration - config service will handle validation
 
@@ -118,17 +118,17 @@ class DummyModule
     request: ApplyConfigRequest,
     context: CallContext
   ): Promise<ApplyConfigResponse> {
-    console.log("[Dummy Module] ApplyConfig called with:", request.config_json);
+    console.log("[Matrix Module] ApplyConfig called with:", request.config_json);
 
     try {
-      const newConfig = JSON.parse(request.config_json) as DummyModuleConfig;
+      const newConfig = JSON.parse(request.config_json) as MatrixModuleConfig;
 
       // Apply the configuration without validation - config service will handle that
       this.config = { ...this.config, ...newConfig };
       this.configVersion = request.config_version || new Date().toISOString();
 
       console.log(
-        "[Dummy Module] Configuration applied successfully:",
+        "[Matrix Module] Configuration applied successfully:",
         this.config
       );
 
@@ -139,7 +139,7 @@ class DummyModule
         applied_config_version: this.configVersion,
       };
     } catch (error) {
-      console.error("[Dummy Module] Error applying configuration:", error);
+      console.error("[Matrix Module] Error applying configuration:", error);
       return {
         success: false,
         error_message: `Failed to parse configuration: ${
@@ -155,7 +155,7 @@ class DummyModule
     request: Empty,
     context: CallContext
   ): Promise<GetCurrentConfigResponse> {
-    console.log("[Dummy Module] GetCurrentConfig called");
+    console.log("[Matrix Module] GetCurrentConfig called");
 
     return {
       success: true,
@@ -170,7 +170,7 @@ class DummyModule
     context: CallContext
   ): Promise<ValidateConfigResponse> {
     console.log(
-      "[Dummy Module] ValidateConfig called with:",
+      "[Matrix Module] ValidateConfig called with:",
       request.config_json
     );
 
@@ -207,26 +207,26 @@ class DummyModule
 // Main execution
 async function main() {
   const port = parseInt(process.env.GRPC_PORT || "50051");
-  console.log(`[Dummy Module] Starting on port ${port}`);
+  console.log(`[Matrix Module] Starting on port ${port}`);
 
   const server = createServer();
-  const dummyModule = new DummyModule();
-  server.add(ModuleServiceDefinition, dummyModule);
-  server.add(ConfigurableModuleServiceDefinition, dummyModule);
+  const matrixModule = new MatrixModule();
+  server.add(ModuleServiceDefinition, matrixModule);
+  server.add(ConfigurableModuleServiceDefinition, matrixModule);
 
   await server.listen(`0.0.0.0:${port}`);
-  console.log(`[Dummy Module] Server started on port ${port}`);
-  console.log("[Dummy Module] Ready to receive requests");
+  console.log(`[Matrix Module] Server started on port ${port}`);
+  console.log("[Matrix Module] Ready to receive requests");
 
   // Keep the process alive and handle shutdown signals
   process.on("SIGINT", () => {
-    console.log("[Dummy Module] Received SIGINT, shutting down gracefully");
+    console.log("[Matrix Module] Received SIGINT, shutting down gracefully");
     server.shutdown();
     process.exit(0);
   });
 
   process.on("SIGTERM", () => {
-    console.log("[Dummy Module] Received SIGTERM, shutting down gracefully");
+    console.log("[Matrix Module] Received SIGTERM, shutting down gracefully");
     server.shutdown();
     process.exit(0);
   });
@@ -234,7 +234,7 @@ async function main() {
 
 if (require.main === module) {
   main().catch((error) => {
-    console.error("[Dummy Module] Failed to start:", error);
+    console.error("[Matrix Module] Failed to start:", error);
     process.exit(1);
   });
 }

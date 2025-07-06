@@ -1,0 +1,35 @@
+{
+  "name": "call-assistant-matrix-module",
+  "version": "1.0.0",
+  "description": "Matrix protocol module for Call Assistant",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc && esbuild src/index.ts --bundle --platform=node --outfile=dist/bundle.js",
+    "start": "node dist/bundle.js",
+    "dev": "ts-node src/index.ts"
+  },
+  "dependencies": {
+    "ajv": "^8.17.1",
+    "call-assistant-protos": "../../generated/typescript",
+    "long": "^5.3.2",
+    "nice-grpc": "^2.1.8",
+    "nice-grpc-common": "^2.0.1",
+    "protobufjs": "^7.5.3",
+    "ts-proto": "^2.7.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "esbuild": "^0.25.5",
+    "ts-node": "^10.9.0",
+    "typescript": "^5.0.0"
+  },
+  "keywords": [
+    "call-assistant",
+    "module",
+    "grpc",
+    "matrix",
+    "protocol"
+  ],
+  "author": "",
+  "license": "ISC"
+}
