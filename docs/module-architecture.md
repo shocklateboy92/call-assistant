@@ -103,11 +103,11 @@ For each module in dependency order:
 3. Execute command in module directory
 4. Capture stdout/stderr for centralized logging
 5. Wait for module to start gRPC server on assigned port
-6. Call RegisterModule() RPC to discover entities and capabilities
-7. Module reports STARTING state, then WAITING_FOR_CONFIG if it needs configuration
-8. Config service (listening to orchestrator events) detects new module
+6. Establish gRPC connection and call HealthCheck() to verify module readiness
+7. Module reports current state (READY when fully initialized)
+8. Config service (listening to orchestrator events) detects new module via status updates
 9. Config service connects directly to module and provides configuration if needed
-10. Module reports READY state and proceed to next module
+10. Module continues operation and proceed to next module
 ```
 
 ### 3. Process Management
@@ -242,19 +242,21 @@ Modules bridge between the orchestrator's abstract entity model and real-world s
 ### Module Configuration Flow
 
 ```
-1. Module Registration: go2rtc module starts and registers with orchestrator
+1. Module Startup: go2rtc module starts and orchestrator performs health check
    ↓
-2. Event Notification: Orchestrator sends ModuleStartedEvent to config service
+2. Status Update: Orchestrator receives module status via HealthCheck response
    ↓
-3. Configuration Discovery: Config service connects to go2rtc module's gRPC port
+3. Event Notification: Orchestrator sends status updates to config service
    ↓
-4. Schema Retrieval: Config service calls GetConfigSchema() directly on module
+4. Configuration Discovery: Config service connects to go2rtc module's gRPC port
    ↓
-5. Configuration Application: Config service calls ApplyConfig() with module settings
+5. Schema Retrieval: Config service calls GetConfigSchema() directly on module
    ↓
-6. State Change: Module transitions from WAITING_FOR_CONFIG to READY
+6. Configuration Application: Config service calls ApplyConfig() with module settings
    ↓
-7. Event Notification: Orchestrator notifies config service of state change
+7. Status Confirmation: Module reports updated state via subsequent health checks
+   ↓
+8. Event Notification: Orchestrator forwards status updates to config service
 ```
 
 ### Camera to Matrix Call Flow
@@ -282,17 +284,17 @@ Modules bridge between the orchestrator's abstract entity model and real-world s
 
 **From go2rtc module's view:**
 1. "Orchestrator started me on port 50051"
-2. "I registered my converter and video_source capabilities"
+2. "I respond to health checks with my current state and capabilities"
 3. "Orchestrator asked me to create converter for rtsp://camera/stream"
 4. "I configured go2rtc via HTTP API and created entity 'conv_123'"
-5. "I'm monitoring the stream and reporting metrics back"
+5. "I'm monitoring the stream and reporting status via health checks"
 
 **From matrix module's view:**  
 1. "Orchestrator started me on port 50052"
-2. "I registered my calling_protocol capability for Matrix"
+2. "I respond to health checks with my calling_protocol capability for Matrix"
 3. "Orchestrator asked me to join room with WebRTC stream URL"
 4. "I used matrix-js-sdk to authenticate and join the call"
-5. "I'm handling call signaling and reporting call status"
+5. "I'm handling call signaling and reporting status via health checks"
 
 ## Benefits
 
