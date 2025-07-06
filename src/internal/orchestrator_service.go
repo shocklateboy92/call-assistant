@@ -87,7 +87,7 @@ func (s *OrchestratorService) ListModules(
 			Version:     module.Module.Manifest.Version,
 			Description: module.Module.Manifest.Description,
 			Status: &commonpb.ModuleStatus{
-				State:        s.convertModuleStatusToProto(module.Status),
+				State:        module.Status,
 				Health:       commonpb.HealthStatus_HEALTH_STATUS_HEALTHY, // TODO: implement health tracking
 				ErrorMessage: module.ErrorMsg,
 			},
@@ -125,7 +125,7 @@ func (s *OrchestratorService) GetModuleInfo(
 		Version:     module.Module.Manifest.Version,
 		Description: module.Module.Manifest.Description,
 		Status: &commonpb.ModuleStatus{
-			State:        s.convertModuleStatusToProto(module.Status),
+			State:        module.Status,
 			Health:       commonpb.HealthStatus_HEALTH_STATUS_HEALTHY, // TODO: implement health tracking
 			ErrorMessage: module.ErrorMsg,
 		},
@@ -280,21 +280,6 @@ func (s *OrchestratorService) SubscribeToMetrics(
 	}
 }
 
-// Helper function to convert internal module status to proto enum
-func (s *OrchestratorService) convertModuleStatusToProto(status ModuleStatus) commonpb.ModuleState {
-	switch status {
-	case ModuleStatusStarting:
-		return commonpb.ModuleState_MODULE_STATE_STARTING
-	case ModuleStatusRunning:
-		return commonpb.ModuleState_MODULE_STATE_READY
-	case ModuleStatusError:
-		return commonpb.ModuleState_MODULE_STATE_ERROR
-	case ModuleStatusStopped:
-		return commonpb.ModuleState_MODULE_STATE_STOPPING
-	default:
-		return commonpb.ModuleState_MODULE_STATE_UNSPECIFIED
-	}
-}
 
 // BroadcastEvent sends an event to all subscribed event streams
 func (s *OrchestratorService) BroadcastEvent(event *eventspb.Event) {

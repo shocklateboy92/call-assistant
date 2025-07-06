@@ -4,44 +4,15 @@ import (
 	"fmt"
 	"sort"
 	"sync"
+
+	commonpb "github.com/shocklateboy92/call-assistant/src/api/proto/common"
 )
 
-// ModuleStatus represents the current status of a module
-type ModuleStatus int
-
-const (
-	ModuleStatusUnknown ModuleStatus = iota
-	ModuleStatusDiscovered
-	ModuleStatusStarting
-	ModuleStatusRunning
-	ModuleStatusStopped
-	ModuleStatusError
-)
-
-// String returns the string representation of ModuleStatus
-func (s ModuleStatus) String() string {
-	switch s {
-	case ModuleStatusUnknown:
-		return "Unknown"
-	case ModuleStatusDiscovered:
-		return "Discovered"
-	case ModuleStatusStarting:
-		return "Starting"
-	case ModuleStatusRunning:
-		return "Running"
-	case ModuleStatusStopped:
-		return "Stopped"
-	case ModuleStatusError:
-		return "Error"
-	default:
-		return "Invalid"
-	}
-}
 
 // RegisteredModule represents a module that has been registered with the orchestrator
 type RegisteredModule struct {
 	Module     DiscoveredModule
-	Status     ModuleStatus
+	Status     commonpb.ModuleState
 	GRPCPort   int
 	ProcessID  int
 	ErrorMsg   string
@@ -74,7 +45,7 @@ func (mr *ModuleRegistry) RegisterModule(module DiscoveredModule) error {
 	// Register the module
 	mr.modules[module.ID] = &RegisteredModule{
 		Module:     module,
-		Status:     ModuleStatusDiscovered,
+		Status:     commonpb.ModuleState_MODULE_STATE_UNSPECIFIED,
 		GRPCPort:   0, // Will be assigned later
 		ProcessID:  0, // Will be assigned when started
 		ErrorMsg:   "",
@@ -108,7 +79,7 @@ func (mr *ModuleRegistry) GetAllModules() map[string]*RegisteredModule {
 }
 
 // GetModulesByStatus returns modules filtered by status
-func (mr *ModuleRegistry) GetModulesByStatus(status ModuleStatus) []*RegisteredModule {
+func (mr *ModuleRegistry) GetModulesByStatus(status commonpb.ModuleState) []*RegisteredModule {
 	mr.mutex.RLock()
 	defer mr.mutex.RUnlock()
 
@@ -125,7 +96,7 @@ func (mr *ModuleRegistry) GetModulesByStatus(status ModuleStatus) []*RegisteredM
 // UpdateModuleStatus updates the status of a module
 func (mr *ModuleRegistry) UpdateModuleStatus(
 	id string,
-	status ModuleStatus,
+	status commonpb.ModuleState,
 	errorMsg string,
 ) error {
 	mr.mutex.Lock()

@@ -4,6 +4,8 @@ go 1.24
 
 require gopkg.in/yaml.v3 v3.0.1
 
+require github.com/shocklateboy92/call-assistant/src/api/proto/module v0.0.0-00010101000000-000000000000 // indirect
+
 require (
 	github.com/shocklateboy92/call-assistant/src/api/proto/common v0.0.0
 	github.com/shocklateboy92/call-assistant/src/api/proto/events v0.0.0
