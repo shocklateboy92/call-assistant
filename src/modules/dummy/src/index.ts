@@ -10,13 +10,11 @@ import {
   ConfigureResponse,
   ShutdownRequest,
   ShutdownResponse,
-  GetModuleInfoResponse,
 } from 'call-assistant-protos/module';
 import {
   ModuleState,
   HealthStatus,
 } from 'call-assistant-protos/common';
-import { Empty } from 'call-assistant-protos/google/protobuf/empty';
 import type { CallContext } from 'nice-grpc-common';
 
 class DummyModule implements ModuleServiceImplementation {
@@ -81,28 +79,6 @@ class DummyModule implements ModuleServiceImplementation {
     return response;
   }
 
-  async getModuleInfo(
-    request: Empty,
-    context: CallContext
-  ): Promise<GetModuleInfoResponse> {
-    console.log('[Dummy Module] GetModuleInfo called');
-    
-    return {
-      module_info: {
-        id: this.moduleId,
-        name: 'Dummy Test Module',
-        version: '1.0.0',
-        description: 'A dummy module for testing orchestrator functionality',
-        grpc_address: `localhost:${process.env.GRPC_PORT || '50051'}`,
-        status: {
-          state: ModuleState.MODULE_STATE_READY,
-          health: HealthStatus.HEALTH_STATUS_HEALTHY,
-          error_message: '',
-          last_heartbeat: new Date(),
-        },
-      },
-    };
-  }
 }
 
 // Main execution
