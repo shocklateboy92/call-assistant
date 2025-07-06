@@ -6,7 +6,6 @@ option go_package = "github.com/shocklateboy92/call-assistant/src/api/proto/modu
 
 import "common.proto";
 import "events.proto";
-import "google/protobuf/empty.proto";
 
 // ModuleService is implemented by each module to handle lifecycle management
 service ModuleService {
@@ -15,9 +14,6 @@ service ModuleService {
   
   // Shutdown is called to gracefully stop the module
   rpc Shutdown(ShutdownRequest) returns (ShutdownResponse);
-  
-  // GetModuleInfo returns current module information and status
-  rpc GetModuleInfo(google.protobuf.Empty) returns (GetModuleInfoResponse);
 }
 
 // EventService is implemented by the orchestrator to receive events from modules
@@ -64,10 +60,6 @@ message ShutdownResponse {
   string error_message = 2;
 }
 
-// Module info messages
-message GetModuleInfoResponse {
-  call_assistant.common.ModuleInfo module_info = 1;
-}
 
 // Event reporting messages
 message ReportEventRequest {
