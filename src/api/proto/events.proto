@@ -5,6 +5,7 @@ package call_assistant.events;
 option go_package = "github.com/shocklateboy92/call-assistant/src/api/proto/events";
 
 import "common.proto";
+import "entities.proto";
 import "google/protobuf/timestamp.proto";
 
 enum EventSeverity {
@@ -27,7 +28,23 @@ message Event {
     ModuleErrorEvent module_error = 12;
     ModuleConfiguredEvent module_configured = 13;
     ModuleHealthChangedEvent module_health_changed = 14;
-    GenericEvent generic = 15;
+    
+    EntityCreatedEvent entity_created = 20;
+    EntityConfiguredEvent entity_configured = 21;
+    EntityDestroyedEvent entity_destroyed = 22;
+    EntityStateChangedEvent entity_state_changed = 23;
+    
+    PipelineCreatedEvent pipeline_created = 30;
+    PipelineStartedEvent pipeline_started = 31;
+    PipelineStoppedEvent pipeline_stopped = 32;
+    PipelineErrorEvent pipeline_error = 33;
+    
+    ConnectionEstablishedEvent connection_established = 40;
+    ConnectionFailedEvent connection_failed = 41;
+    ConnectionClosedEvent connection_closed = 42;
+    QualityAdjustedEvent quality_adjusted = 43;
+    
+    GenericEvent generic = 99;
   }
 }
 
@@ -64,6 +81,98 @@ message ModuleHealthChangedEvent {
   call_assistant.common.HealthStatus old_health = 1;
   call_assistant.common.HealthStatus new_health = 2;
   string reason = 3;
+}
+
+// Entity lifecycle events
+message EntityCreatedEvent {
+  string entity_id = 1;
+  string entity_type = 2;
+  map<string, string> initial_config = 3;
+}
+
+message EntityConfiguredEvent {
+  string entity_id = 1;
+  map<string, string> old_config = 2;
+  map<string, string> new_config = 3;
+  repeated string changed_keys = 4;
+}
+
+message EntityDestroyedEvent {
+  string entity_id = 1;
+  string reason = 2;
+  bool was_graceful = 3;
+}
+
+message EntityStateChangedEvent {
+  string entity_id = 1;
+  call_assistant.entities.EntityState old_state = 2;
+  call_assistant.entities.EntityState new_state = 3;
+  string reason = 4;
+}
+
+// Pipeline lifecycle events
+message PipelineCreatedEvent {
+  string pipeline_id = 1;
+  string pipeline_name = 2;
+  repeated string entity_ids = 3;
+}
+
+message PipelineStartedEvent {
+  string pipeline_id = 1;
+  int32 startup_duration_ms = 2;
+  repeated string active_connections = 3;
+}
+
+message PipelineStoppedEvent {
+  string pipeline_id = 1;
+  string reason = 2;
+  bool was_graceful = 3;
+  int32 shutdown_duration_ms = 4;
+}
+
+message PipelineErrorEvent {
+  string pipeline_id = 1;
+  string error_code = 2;
+  string error_message = 3;
+  string failed_entity_id = 4;
+  string failed_connection_id = 5;
+  bool is_recoverable = 6;
+}
+
+// Connection events
+message ConnectionEstablishedEvent {
+  string connection_id = 1;
+  string source_entity_id = 2;
+  string target_entity_id = 3;
+  call_assistant.entities.MediaType media_type = 4;
+  call_assistant.entities.QualityProfile quality = 5;
+  int32 establishment_duration_ms = 6;
+}
+
+message ConnectionFailedEvent {
+  string connection_id = 1;
+  string source_entity_id = 2;
+  string target_entity_id = 3;
+  string error_code = 4;
+  string error_message = 5;
+  int32 retry_attempt = 6;
+  bool is_recoverable = 7;
+}
+
+message ConnectionClosedEvent {
+  string connection_id = 1;
+  string reason = 2;
+  bool was_graceful = 3;
+  int64 bytes_transferred = 4;
+  int32 duration_ms = 5;
+}
+
+message QualityAdjustedEvent {
+  string connection_id = 1;
+  call_assistant.entities.QualityProfile old_quality = 2;
+  call_assistant.entities.QualityProfile new_quality = 3;
+  string reason = 4;
+  bool was_automatic = 5;
 }
 
 // Generic event for cases not covered by specific types

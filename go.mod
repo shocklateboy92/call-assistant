@@ -11,6 +11,7 @@ require (
 	github.com/shocklateboy92/call-assistant/src/api/proto/entities v0.0.0
 	github.com/shocklateboy92/call-assistant/src/api/proto/events v0.0.0
 	github.com/shocklateboy92/call-assistant/src/api/proto/orchestrator v0.0.0
+	github.com/shocklateboy92/call-assistant/src/api/proto/pipeline v0.0.0
 	golang.org/x/net v0.38.0 // indirect
 	golang.org/x/sys v0.31.0 // indirect
 	golang.org/x/text v0.23.0 // indirect
@@ -26,4 +27,5 @@ replace (
 	github.com/shocklateboy92/call-assistant/src/api/proto/events => ./src/generated/go/github.com/shocklateboy92/call-assistant/src/api/proto/events
 	github.com/shocklateboy92/call-assistant/src/api/proto/module => ./src/generated/go/github.com/shocklateboy92/call-assistant/src/api/proto/module
 	github.com/shocklateboy92/call-assistant/src/api/proto/orchestrator => ./src/generated/go/github.com/shocklateboy92/call-assistant/src/api/proto/orchestrator
+	github.com/shocklateboy92/call-assistant/src/api/proto/pipeline => ./src/generated/go/github.com/shocklateboy92/call-assistant/src/api/proto/pipeline
 )

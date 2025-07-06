@@ -144,11 +144,21 @@ func runOrchestrator(ctx context.Context, modulesDir string, devMode bool, verbo
 
 	slog.Info("All modules started successfully")
 
-	// Phase 5: Start gRPC Server
-	fmt.Println("\n🌐 Phase 5: Starting gRPC Server")
+	// Phase 5: Initialize Media Graph and Pipeline Management
+	fmt.Println("\n📊 Phase 5: Media Graph and Pipeline Management")
 	fmt.Println("───────────────────────────────────────────────────────────────")
 
-	orchestratorService := internal.NewOrchestratorService(registry, manager)
+	mediaGraph := internal.NewMediaGraphManager(registry)
+	pipelineManager := internal.NewPipelineManager(registry, mediaGraph)
+
+	// Start entity discovery
+	go mediaGraph.StartDiscovery(ctx)
+
+	// Phase 6: Start gRPC Server
+	fmt.Println("\n🌐 Phase 6: Starting gRPC Server")
+	fmt.Println("───────────────────────────────────────────────────────────────")
+
+	orchestratorService := internal.NewOrchestratorService(registry, manager, mediaGraph, pipelineManager)
 
 	// Start gRPC server in goroutine
 	go func() {
@@ -157,8 +167,8 @@ func runOrchestrator(ctx context.Context, modulesDir string, devMode bool, verbo
 		}
 	}()
 
-	// Phase 6: Status Monitoring
-	fmt.Println("\n📊 Phase 6: Status Monitoring")
+	// Phase 7: Status Monitoring
+	fmt.Println("\n📈 Phase 7: Status Monitoring")
 	fmt.Println("───────────────────────────────────────────────────────────────")
 
 	// Start status monitoring routine

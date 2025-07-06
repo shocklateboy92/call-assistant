@@ -6,6 +6,8 @@ option go_package = "github.com/shocklateboy92/call-assistant/src/api/proto/orch
 
 import "common.proto";
 import "events.proto";
+import "entities.proto";
+import "pipeline.proto";
 import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
 
@@ -18,6 +20,20 @@ service OrchestratorService {
   rpc RestartModule(RestartModuleRequest) returns (RestartModuleResponse);
   rpc ShutdownModule(ShutdownModuleRequest) returns (ShutdownModuleResponse);
   
+  // Entity management
+  rpc ListEntities(call_assistant.entities.ListEntitiesRequest) returns (call_assistant.entities.ListEntitiesResponse);
+  rpc GetEntityStatus(call_assistant.entities.GetEntityStatusRequest) returns (call_assistant.entities.GetEntityStatusResponse);
+  rpc GetMediaGraph(call_assistant.pipeline.GetMediaGraphRequest) returns (call_assistant.pipeline.GetMediaGraphResponse);
+  
+  // Pipeline management
+  rpc CreatePipeline(call_assistant.pipeline.CreatePipelineRequest) returns (call_assistant.pipeline.CreatePipelineResponse);
+  rpc StartPipeline(call_assistant.pipeline.StartPipelineRequest) returns (call_assistant.pipeline.StartPipelineResponse);
+  rpc StopPipeline(call_assistant.pipeline.StopPipelineRequest) returns (call_assistant.pipeline.StopPipelineResponse);
+  rpc DeletePipeline(call_assistant.pipeline.DeletePipelineRequest) returns (call_assistant.pipeline.DeletePipelineResponse);
+  rpc GetPipelineStatus(call_assistant.pipeline.GetPipelineStatusRequest) returns (call_assistant.pipeline.GetPipelineStatusResponse);
+  rpc ListPipelines(call_assistant.pipeline.ListPipelinesRequest) returns (call_assistant.pipeline.ListPipelinesResponse);
+  rpc AdjustQuality(call_assistant.pipeline.AdjustQualityRequest) returns (call_assistant.pipeline.AdjustQualityResponse);
+  rpc CalculatePath(call_assistant.pipeline.CalculatePathRequest) returns (call_assistant.pipeline.CalculatePathResponse);
   
   // Event subscription for services
   rpc SubscribeToEvents(SubscribeToEventsRequest) returns (stream call_assistant.events.Event);

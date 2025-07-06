@@ -1,0 +1,221 @@
+syntax = "proto3";
+
+package call_assistant.pipeline;
+
+option go_package = "github.com/shocklateboy92/call-assistant/src/api/proto/pipeline";
+
+import "google/protobuf/timestamp.proto";
+import "common.proto";
+import "entities.proto";
+
+// Pipeline states
+enum PipelineState {
+  PIPELINE_STATE_UNSPECIFIED = 0;
+  PIPELINE_STATE_CREATED = 1;
+  PIPELINE_STATE_INITIALIZING = 2;
+  PIPELINE_STATE_ACTIVE = 3;
+  PIPELINE_STATE_STOPPED = 4;
+  PIPELINE_STATE_ERROR = 5;
+}
+
+// Entity reference in pipeline with session configuration
+message EntityReference {
+  string entity_id = 1;                         // Direct reference to entity
+  string session_id = 2;                       // Pipeline-specific session
+  map<string, string> session_config = 3;      // Pipeline-specific config
+}
+
+// Pipeline definition
+message Pipeline {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  
+  // Entity references
+  repeated EntityReference entity_refs = 4;
+  
+  // Connections between entities
+  repeated call_assistant.entities.Connection connections = 5;
+  
+  // Pipeline status
+  PipelineStatus status = 6;
+  
+  // Timestamps
+  google.protobuf.Timestamp created_at = 7;
+  google.protobuf.Timestamp started_at = 8;
+  google.protobuf.Timestamp stopped_at = 9;
+}
+
+message PipelineStatus {
+  PipelineState state = 1;
+  call_assistant.common.HealthStatus health = 2;
+  string error_message = 3;
+  
+  // Pipeline-level metrics
+  map<string, call_assistant.common.MetricValue> metrics = 4;
+  
+  // Resource usage
+  int64 bandwidth_usage = 5;
+  int32 latency_ms = 6;
+  
+  google.protobuf.Timestamp last_updated = 7;
+}
+
+// Media graph structure
+message MediaGraph {
+  // All available entities (managed by modules)
+  repeated call_assistant.entities.MediaSource media_sources = 1;
+  repeated call_assistant.entities.MediaSink media_sinks = 2;
+  repeated call_assistant.entities.Protocol protocols = 3;
+  repeated call_assistant.entities.Converter converters = 4;
+  
+  // Active pipelines
+  repeated Pipeline pipelines = 5;
+  
+  // Graph metadata
+  google.protobuf.Timestamp last_updated = 6;
+}
+
+// Path calculation for pipeline construction
+message PathRequest {
+  string source_entity_id = 1;
+  string target_entity_id = 2;
+  call_assistant.entities.MediaType media_type = 3;
+  call_assistant.entities.QualityProfile desired_quality = 4;
+  map<string, string> constraints = 5;          // Additional constraints
+}
+
+message PathResponse {
+  bool success = 1;
+  string error_message = 2;
+  
+  // Ordered list of entity IDs forming the path
+  repeated string entity_path = 3;
+  
+  // Proposed connections
+  repeated call_assistant.entities.Connection connections = 4;
+  
+  // Estimated metrics
+  int32 estimated_latency_ms = 5;
+  int64 estimated_bandwidth = 6;
+}
+
+// Pipeline service requests and responses
+message CreatePipelineRequest {
+  string name = 1;
+  string description = 2;
+  repeated EntityReference entity_refs = 3;
+  repeated call_assistant.entities.Connection connections = 4;
+}
+
+message CreatePipelineResponse {
+  bool success = 1;
+  string error_message = 2;
+  Pipeline pipeline = 3;
+}
+
+message StartPipelineRequest {
+  string pipeline_id = 1;
+  map<string, string> runtime_config = 2;      // Runtime overrides
+}
+
+message StartPipelineResponse {
+  bool success = 1;
+  string error_message = 2;
+  PipelineStatus status = 3;
+}
+
+message StopPipelineRequest {
+  string pipeline_id = 1;
+  bool force = 2;                               // Force stop vs graceful
+}
+
+message StopPipelineResponse {
+  bool success = 1;
+  string error_message = 2;
+  PipelineStatus status = 3;
+}
+
+message GetPipelineStatusRequest {
+  string pipeline_id = 1;
+}
+
+message GetPipelineStatusResponse {
+  bool success = 1;
+  string error_message = 2;
+  PipelineStatus status = 3;
+}
+
+message ListPipelinesRequest {
+  PipelineState state_filter = 1;              // Optional filter by state
+  string entity_filter = 2;                    // Optional filter by entity involvement
+}
+
+message ListPipelinesResponse {
+  bool success = 1;
+  string error_message = 2;
+  repeated Pipeline pipelines = 3;
+}
+
+message DeletePipelineRequest {
+  string pipeline_id = 1;
+  bool force = 2;                               // Force delete vs graceful
+}
+
+message DeletePipelineResponse {
+  bool success = 1;
+  string error_message = 2;
+}
+
+// Pipeline adjustment requests
+message AdjustQualityRequest {
+  string pipeline_id = 1;
+  string connection_id = 2;                     // Specific connection to adjust
+  call_assistant.entities.QualityProfile new_quality = 3;
+}
+
+message AdjustQualityResponse {
+  bool success = 1;
+  string error_message = 2;
+  call_assistant.entities.Connection updated_connection = 3;
+}
+
+// Graph management
+message GetMediaGraphRequest {
+  bool include_pipelines = 1;
+  bool include_inactive_entities = 2;
+}
+
+message GetMediaGraphResponse {
+  bool success = 1;
+  string error_message = 2;
+  MediaGraph graph = 3;
+}
+
+message CalculatePathRequest {
+  PathRequest path_request = 1;
+}
+
+message CalculatePathResponse {
+  PathResponse path_response = 1;
+}
+
+// Pipeline Service - Core pipeline management
+service PipelineService {
+  // Pipeline lifecycle
+  rpc CreatePipeline(CreatePipelineRequest) returns (CreatePipelineResponse);
+  rpc StartPipeline(StartPipelineRequest) returns (StartPipelineResponse);
+  rpc StopPipeline(StopPipelineRequest) returns (StopPipelineResponse);
+  rpc DeletePipeline(DeletePipelineRequest) returns (DeletePipelineResponse);
+  
+  // Pipeline queries
+  rpc GetPipelineStatus(GetPipelineStatusRequest) returns (GetPipelineStatusResponse);
+  rpc ListPipelines(ListPipelinesRequest) returns (ListPipelinesResponse);
+  
+  // Pipeline adjustments
+  rpc AdjustQuality(AdjustQualityRequest) returns (AdjustQualityResponse);
+  
+  // Graph operations
+  rpc GetMediaGraph(GetMediaGraphRequest) returns (GetMediaGraphResponse);
+  rpc CalculatePath(CalculatePathRequest) returns (CalculatePathResponse);
+}
