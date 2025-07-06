@@ -1,0 +1,84 @@
+syntax = "proto3";
+
+package call_assistant.services.config;
+
+option go_package = "github.com/shocklateboy92/call-assistant/src/api/proto/services/config";
+
+import "google/protobuf/empty.proto";
+import "events.proto";
+
+// ConfigService is provided by the config service to manage module configuration
+// The config service uses orchestrator's existing event subscription and module listing
+// No additional methods needed - uses OrchestratorService.SubscribeToEvents() and ListModules()
+service ConfigService {
+  // This service intentionally left minimal - config service uses orchestrator APIs directly
+}
+
+// ConfigurableModuleService is optionally implemented by modules that need configuration
+service ConfigurableModuleService {
+  // GetConfigSchema returns the JSON schema for this module's configuration
+  rpc GetConfigSchema(google.protobuf.Empty) returns (GetConfigSchemaResponse);
+  
+  // ApplyConfig applies the provided configuration to the module
+  rpc ApplyConfig(ApplyConfigRequest) returns (ApplyConfigResponse);
+  
+  // GetCurrentConfig returns the module's current configuration
+  rpc GetCurrentConfig(google.protobuf.Empty) returns (GetCurrentConfigResponse);
+  
+  // ValidateConfig validates configuration without applying it
+  rpc ValidateConfig(ValidateConfigRequest) returns (ValidateConfigResponse);
+}
+
+// Configuration schema and value types
+message ConfigSchema {
+  string schema_version = 1;  // Semantic version of the schema
+  string json_schema = 2;     // JSON Schema definition (RFC 7159)
+  bool required = 3;          // Whether configuration is required for module to function
+}
+
+// No additional request/response messages needed for ConfigService
+// Uses existing orchestrator messages for module discovery and events
+
+// Request/Response messages for ConfigurableModuleService (implemented by modules)
+message GetConfigSchemaResponse {
+  bool success = 1;
+  string error_message = 2;
+  ConfigSchema schema = 3;
+}
+
+message ApplyConfigRequest {
+  string config_json = 1;     // Configuration as JSON string
+  string config_version = 2;  // Version/hash for tracking changes
+}
+
+message ApplyConfigResponse {
+  bool success = 1;
+  string error_message = 2;
+  repeated ConfigValidationError validation_errors = 3;
+  string applied_config_version = 4;
+}
+
+message GetCurrentConfigResponse {
+  bool success = 1;
+  string error_message = 2;
+  string config_json = 3;     // Current configuration as JSON string
+  string config_version = 4;
+}
+
+message ValidateConfigRequest {
+  string config_json = 1;     // Configuration to validate as JSON string
+}
+
+message ValidateConfigResponse {
+  bool valid = 1;
+  repeated ConfigValidationError validation_errors = 2;
+}
+
+// Common validation error type
+message ConfigValidationError {
+  string field_path = 1;      // e.g., "database.host", "servers[0].port"
+  string error_code = 2;      // e.g., "REQUIRED", "INVALID_TYPE", "OUT_OF_RANGE"
+  string error_message = 3;   // Human-readable error message
+  string provided_value = 4;  // The JSON value that caused the error
+  string expected_constraint = 5;  // Expected constraint or pattern
+}

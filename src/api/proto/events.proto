@@ -35,7 +35,6 @@ message Event {
 message ModuleStartedEvent {
   string module_version = 1;
   int32 startup_duration_ms = 2;
-  call_assistant.common.ModuleCapabilities capabilities = 3;
   string process_id = 4;
   int32 grpc_port = 5;
 }
