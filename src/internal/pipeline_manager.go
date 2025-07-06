@@ -128,11 +128,14 @@ func (pm *PipelineManager) CreatePipeline(req *pipelinepb.CreatePipelineRequest)
 
 // StartPipeline starts all connections in a pipeline
 func (pm *PipelineManager) StartPipeline(req *pipelinepb.StartPipelineRequest) (*pipelinepb.StartPipelineResponse, error) {
+	slog.Info("StartPipeline called", "pipeline_id", req.PipelineId, "runtime_config", req.RuntimeConfig)
+	
 	pm.pipelinesMu.Lock()
 	defer pm.pipelinesMu.Unlock()
 	
 	pipelineState, exists := pm.pipelines[req.PipelineId]
 	if !exists {
+		slog.Error("Pipeline not found", "pipeline_id", req.PipelineId)
 		return &pipelinepb.StartPipelineResponse{
 			Success:      false,
 			ErrorMessage: fmt.Sprintf("Pipeline not found: %s", req.PipelineId),
@@ -140,25 +143,33 @@ func (pm *PipelineManager) StartPipeline(req *pipelinepb.StartPipelineRequest) (
 		}, nil
 	}
 	
+	slog.Info("Found pipeline", "pipeline_id", req.PipelineId, "connections_count", len(pipelineState.Connections))
+	
 	// Update pipeline state
 	pipelineState.Pipeline.Status.State = pipelinepb.PipelineState_PIPELINE_STATE_INITIALIZING
 	startTime := time.Now()
 	pipelineState.StartedAt = &startTime
 	pipelineState.Pipeline.StartedAt = timestamppb.New(startTime)
 	
+	slog.Info("Pipeline state updated to INITIALIZING", "pipeline_id", req.PipelineId)
+	
 	// Start all connections
 	var errors []string
-	for _, connState := range pipelineState.Connections {
+	for connId, connState := range pipelineState.Connections {
+		slog.Info("Starting connection", "pipeline_id", req.PipelineId, "connection_id", connId)
 		err := pm.startConnection(connState, req.RuntimeConfig)
 		if err != nil {
+			slog.Error("Failed to start connection", "pipeline_id", req.PipelineId, "connection_id", connId, "error", err)
 			errors = append(errors, fmt.Sprintf("Connection %s: %v", connState.Connection.Id, err))
 			continue
 		}
 		connState.StartedAt = &startTime
+		slog.Info("Connection started successfully", "pipeline_id", req.PipelineId, "connection_id", connId)
 	}
 	
 	// Update pipeline status based on connection results
 	if len(errors) > 0 {
+		slog.Error("Pipeline startup failed", "pipeline_id", req.PipelineId, "errors", errors)
 		pipelineState.Pipeline.Status.State = pipelinepb.PipelineState_PIPELINE_STATE_ERROR
 		pipelineState.Pipeline.Status.ErrorMessage = fmt.Sprintf("Failed to start connections: %v", errors)
 		
@@ -172,7 +183,7 @@ func (pm *PipelineManager) StartPipeline(req *pipelinepb.StartPipelineRequest) (
 	pipelineState.Pipeline.Status.State = pipelinepb.PipelineState_PIPELINE_STATE_ACTIVE
 	pipelineState.Pipeline.Status.LastUpdated = timestamppb.Now()
 	
-	slog.Info("Started pipeline", "pipeline_id", req.PipelineId)
+	slog.Info("Pipeline started successfully", "pipeline_id", req.PipelineId, "state", pipelineState.Pipeline.Status.State)
 	
 	return &pipelinepb.StartPipelineResponse{
 		Success: true,
@@ -184,36 +195,56 @@ func (pm *PipelineManager) StartPipeline(req *pipelinepb.StartPipelineRequest) (
 func (pm *PipelineManager) startConnection(connState *ConnectionState, runtimeConfig map[string]string) error {
 	conn := connState.Connection
 	
+	slog.Info("Starting connection", 
+		"connection_id", conn.Id,
+		"source_entity", conn.SourceEntityId,
+		"target_entity", conn.TargetEntityId,
+		"media_type", conn.MediaType)
+	
 	// Determine which module should handle this connection
 	// For now, use the source module (could be more sophisticated)
 	moduleID := connState.SourceModuleID
-	_ = connState.TargetModuleID // Mark as used
+	targetModuleID := connState.TargetModuleID
+	
+	slog.Info("Connection module mapping",
+		"connection_id", conn.Id,
+		"source_module", moduleID,
+		"target_module", targetModuleID)
 	
 	module, exists := pm.registry.GetModule(moduleID)
 	if !exists {
+		slog.Error("Source module not found", "module_id", moduleID, "connection_id", conn.Id)
 		return fmt.Errorf("module not found: %s", moduleID)
 	}
 	
 	if module.GRPCPort == 0 {
+		slog.Error("Module not running", "module_id", moduleID, "connection_id", conn.Id)
 		return fmt.Errorf("module not running: %s", moduleID)
 	}
 	
+	grpcAddress := fmt.Sprintf("localhost:%d", module.GRPCPort)
+	slog.Info("Connecting to module", "module_id", moduleID, "grpc_address", grpcAddress, "connection_id", conn.Id)
+	
 	// Connect to module
 	grpcConn, err := grpc.Dial(
-		fmt.Sprintf("localhost:%d", module.GRPCPort),
+		grpcAddress,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 	if err != nil {
+		slog.Error("Failed to dial module gRPC", "module_id", moduleID, "address", grpcAddress, "error", err)
 		return fmt.Errorf("failed to connect to module: %w", err)
 	}
 	defer grpcConn.Close()
 	
+	slog.Info("Successfully connected to module gRPC", "module_id", moduleID, "connection_id", conn.Id)
+	
 	// Create pipeline service client
 	client := modulepb.NewPipelineServiceClient(grpcConn)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second) // Increased timeout
 	defer cancel()
 	
 	// Connect entities
+	slog.Info("Calling ConnectEntities on module", "module_id", moduleID, "connection_id", conn.Id)
 	connectResp, err := client.ConnectEntities(ctx, &modulepb.ConnectEntitiesRequest{
 		SourceEntityId: conn.SourceEntityId,
 		TargetEntityId: conn.TargetEntityId,
@@ -222,30 +253,44 @@ func (pm *PipelineManager) startConnection(connState *ConnectionState, runtimeCo
 		ConnectionConfig: runtimeConfig,
 	})
 	if err != nil {
+		slog.Error("ConnectEntities gRPC call failed", "module_id", moduleID, "connection_id", conn.Id, "error", err)
 		return fmt.Errorf("failed to connect entities: %w", err)
 	}
 	
 	if !connectResp.Success {
+		slog.Error("ConnectEntities failed", "module_id", moduleID, "connection_id", conn.Id, "error", connectResp.ErrorMessage)
 		return fmt.Errorf("module failed to connect entities: %s", connectResp.ErrorMessage)
 	}
 	
+	slog.Info("ConnectEntities successful", "module_id", moduleID, "connection_id", conn.Id)
+	
 	// Update connection with response from module
 	if connectResp.Connection != nil {
+		slog.Info("Updating connection with module response", 
+			"old_connection_id", conn.Id, 
+			"new_connection_id", connectResp.Connection.Id)
 		connState.Connection = connectResp.Connection
+		conn = connState.Connection  // Use the updated connection for subsequent calls
 	}
 	
 	// Start flow
+	slog.Info("Calling StartFlow on module", "module_id", moduleID, "connection_id", conn.Id)
 	flowResp, err := client.StartFlow(ctx, &modulepb.StartFlowRequest{
 		ConnectionId:  conn.Id,
 		RuntimeConfig: runtimeConfig,
 	})
 	if err != nil {
+		slog.Error("StartFlow gRPC call failed", "module_id", moduleID, "connection_id", conn.Id, "error", err)
 		return fmt.Errorf("failed to start flow: %w", err)
 	}
 	
 	if !flowResp.Success {
+		slog.Error("StartFlow failed", "module_id", moduleID, "connection_id", conn.Id, "error", flowResp.ErrorMessage)
 		return fmt.Errorf("module failed to start flow: %s", flowResp.ErrorMessage)
 	}
+	
+	slog.Info("StartFlow successful", "module_id", moduleID, "connection_id", conn.Id, "status", flowResp.Status)
+	slog.Info("Connection started successfully", "connection_id", conn.Id)
 	
 	return nil
 }

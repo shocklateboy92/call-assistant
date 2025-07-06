@@ -600,15 +600,23 @@ func testPipelineManagement(client orchestratorpb.OrchestratorServiceClient) err
 
 	// Test StartPipeline
 	fmt.Println("  Testing StartPipeline...")
-	startResp, err := client.StartPipeline(ctx, &pipelinepb.StartPipelineRequest{
+	fmt.Printf("  About to call StartPipeline with pipeline ID: %s\n", pipelineID)
+	
+	startReq := &pipelinepb.StartPipelineRequest{
 		PipelineId: pipelineID,
 		RuntimeConfig: map[string]string{
 			"test_mode": "true",
 		},
-	})
+	}
+	fmt.Printf("  StartPipeline request: %+v\n", startReq)
+	
+	startResp, err := client.StartPipeline(ctx, startReq)
 	if err != nil {
+		fmt.Printf("  gRPC call failed with error: %v\n", err)
 		return fmt.Errorf("failed to start pipeline: %w", err)
 	}
+	
+	fmt.Printf("  StartPipeline gRPC call completed successfully\n")
 
 	if !startResp.Success {
 		return fmt.Errorf("StartPipeline failed: %s", startResp.ErrorMessage)

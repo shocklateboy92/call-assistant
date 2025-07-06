@@ -477,7 +477,24 @@ func (s *OrchestratorService) StartPipeline(
 	ctx context.Context,
 	req *pipelinepb.StartPipelineRequest,
 ) (*pipelinepb.StartPipelineResponse, error) {
-	return s.pipelineManager.StartPipeline(req)
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("Panic in StartPipeline", "panic", r, "pipeline_id", req.PipelineId)
+		}
+	}()
+	
+	slog.Info("OrchestratorService.StartPipeline called", "pipeline_id", req.PipelineId)
+	
+	result, err := s.pipelineManager.StartPipeline(req)
+	if err != nil {
+		slog.Error("PipelineManager.StartPipeline returned error", "error", err, "pipeline_id", req.PipelineId)
+	} else if result != nil && !result.Success {
+		slog.Error("PipelineManager.StartPipeline failed", "error", result.ErrorMessage, "pipeline_id", req.PipelineId)
+	} else {
+		slog.Info("PipelineManager.StartPipeline succeeded", "pipeline_id", req.PipelineId)
+	}
+	
+	return result, err
 }
 
 // StopPipeline stops a pipeline
