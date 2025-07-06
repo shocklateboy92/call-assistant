@@ -1,0 +1,8 @@
+name: "matrix"
+version: "1.0.0"
+description: "Matrix protocol module for video calling"
+
+command: "npm start"
+dev_command: "npm run dev"
+
+dependencies: []

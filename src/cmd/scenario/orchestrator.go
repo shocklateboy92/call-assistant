@@ -108,6 +108,27 @@ func TestOrchestratorService() error {
 	}
 
 	fmt.Printf("Found %d modules:\n", len(listResp.Modules))
+	
+	// Validate we have exactly 2 modules
+	if len(listResp.Modules) != 2 {
+		return fmt.Errorf("expected 2 modules, but found %d", len(listResp.Modules))
+	}
+	
+	// Validate we have the expected modules (dummy and matrix)
+	moduleIds := make(map[string]bool)
+	for _, module := range listResp.Modules {
+		moduleIds[module.Id] = true
+	}
+	
+	if !moduleIds["dummy"] {
+		return fmt.Errorf("dummy module not found")
+	}
+	if !moduleIds["matrix"] {
+		return fmt.Errorf("matrix module not found")
+	}
+	
+	fmt.Println("✅ Expected modules found: dummy and matrix")
+	
 	for i, module := range listResp.Modules {
 		fmt.Printf("  %d. %s (%s)\n", i+1, module.Name, module.Id)
 		fmt.Printf("     Version: %s\n", module.Version)
