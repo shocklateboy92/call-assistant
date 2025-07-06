@@ -1,319 +1,50 @@
 # Module Architecture
 
-## Overview
+## Core Concepts
 
-The Call Assistant uses a **module-based architecture** where the orchestrator discovers and manages independent processes that provide entities to the system. Modules are language-agnostic and communicate with the orchestrator via gRPC.
+**Module**: Independent process providing entities (go2rtc, matrix, chromecast)
+**Service**: In-process shared capability (config, webui)
 
-## Module Discovery
+## Module Discovery & Startup
 
-### Directory Structure
+1. Orchestrator scans `src/modules/` for `module.yaml` files
+2. Resolves dependencies and assigns gRPC ports
+3. Starts modules: `GRPC_PORT=50051 ./command`
+4. Health checks until module reports READY
+5. Config service connects and provides configuration
 
-The orchestrator scans for modules using this directory structure:
-
-```
-call-assistant/
-├── modules/
-│   ├── go2rtc/
-│   │   ├── module.yaml
-│   │   └── go2rtc-module          # Binary executable
-│   ├── matrix/
-│   │   ├── module.yaml
-│   │   ├── package.json
-│   │   └── src/
-│   │       └── index.ts
-│   ├── chromecast/
-│   │   ├── module.yaml
-│   │   ├── requirements.txt
-│   │   └── chromecast_module.py
-│   └── onvif-discovery/
-│       ├── module.yaml
-│       └── onvif-scanner.go
-```
-
-### Module Manifest (module.yaml)
-
-Each module directory contains a minimal `module.yaml` manifest:
-
+### module.yaml Format
 ```yaml
-# modules/go2rtc/module.yaml
 name: "go2rtc-bridge"
 version: "1.0.0"
-description: "Provides RTSP to WebRTC conversion using go2rtc"
-
-# Production execution command
+description: "RTSP to WebRTC conversion"
 command: "./go2rtc-module"
-
-# Development execution command (compile, watch mode, etc.)
 dev_command: "go run . --dev"
-
-# Modules that must be registered before this module starts
-dependencies:
-  - "device-discovery"
-  - "config-manager"
+dependencies: ["device-discovery"]
 ```
 
-```yaml
-# modules/matrix/module.yaml  
-name: "matrix-protocol"
-version: "1.0.0"
-description: "Matrix calling protocol implementation"
+## Communication Patterns
 
-command: "npm start"
-dev_command: "npm run dev"
+- **Service ↔ Orchestrator**: Direct calls (in-process)
+- **Orchestrator ↔ Module**: gRPC (entity management)
+- **Service ↔ Module**: Direct gRPC (configuration)
+- **Module ↔ External**: Native APIs (HTTP, SDKs)
+- **Module ↔ Module**: FORBIDDEN (use orchestrator)
 
-dependencies: []
-```
+## Module Responsibilities
 
-```yaml
-# modules/chromecast/module.yaml
-name: "chromecast-bridge"
-version: "1.0.0" 
-description: "Chromecast device control and casting"
+1. **Entity Provision**: Create/manage entities on demand
+2. **Health Reporting**: Regular status updates via HealthCheck()
+3. **Protocol Translation**: Bridge orchestrator ↔ external systems
 
-command: "python chromecast_module.py"
-dev_command: "python chromecast_module.py --dev"
-
-dependencies:
-  - "device-discovery"
-```
-
-## Orchestrator-Driven Lifecycle
-
-### 1. Module Discovery Phase
-
-The orchestrator follows this startup sequence:
+## Example Flow
 
 ```
-Startup → Scan modules/ directory → Parse module.yaml files → Build dependency graph → Start modules in order
+Camera → go2rtc Converter → Matrix Protocol → Remote User
+RTSP     gRPC calls        WebRTC stream    Matrix SDK
 ```
 
-**Discovery Process:**
-1. **Directory Scan**: Recursively scan `modules/` directory for `module.yaml` files
-2. **Manifest Parsing**: Load and validate each manifest
-3. **Dependency Resolution**: Build dependency graph and determine startup order
-4. **Environment Preparation**: Assign gRPC ports and prepare execution environment
-
-### 2. Module Startup Sequence
-
-For each module in dependency order:
-
-```
-1. Assign available gRPC port
-2. Set GRPC_PORT environment variable  
-3. Execute command in module directory
-4. Capture stdout/stderr for centralized logging
-5. Wait for module to start gRPC server on assigned port
-6. Establish gRPC connection and call HealthCheck() to verify module readiness
-7. Module reports current state (READY when fully initialized)
-8. Config service (listening to orchestrator events) detects new module via status updates
-9. Config service connects directly to module and provides configuration if needed
-10. Module continues operation and proceed to next module
-```
-
-### 3. Process Management
-
-**Environment Variables:**
-- `GRPC_PORT`: Assigned port for the module's gRPC server (e.g. "50051")
-- Standard environment variables are inherited from orchestrator
-
-**Logging Integration:**
-- All module stdout/stderr is captured and tagged with module name
-- Structured logging with consistent format across all modules
-- Centralized log aggregation and rotation
-
-**Process Monitoring:**
-- Regular gRPC health checks to each module
-- Automatic restart on process failure
-- Graceful shutdown with SIGTERM/SIGKILL escalation
-
-## What is a Module?
-
-### Conceptual Definition
-
-A **module** is an **independent process** that provides one or more **entities** to the call assistant system. Modules are domain experts that handle specific technologies:
-
-- **go2rtc module**: Expert at streaming protocol conversion (RTSP ↔ WebRTC)
-- **matrix module**: Expert at Matrix calling protocol and signaling
-- **chromecast module**: Expert at casting to Chromecast devices  
-- **onvif-discovery module**: Expert at discovering IP cameras on the network
-
-## What is a Service?
-
-### Conceptual Definition
-
-A **service** is a **shared capability** that provides common functionality to multiple modules and the orchestrator. Services handle cross-cutting concerns and shared infrastructure:
-
-- **config service**: Centralized configuration management for all modules
-- **web UI service**: Dashboard and control interface for the entire system
-
-### Services vs Modules
-
-| Aspect | **Services** | **Modules** |
-|--------|-------------|-------------|
-| **Purpose** | Cross-cutting concerns, shared infrastructure | Domain-specific entity management |
-| **Consumers** | Multiple modules + orchestrator | Only orchestrator |
-| **Execution** | In-process with orchestrator (migration-ready) | Separate processes |
-| **Examples** | Config, Web UI | go2rtc, Matrix, Chromecast |
-| **Communication** | Direct function calls (in-process) | gRPC (across processes) |
-| **Lifecycle** | Managed by orchestrator startup | Managed by orchestrator discovery |
-| **Dependencies** | **Services sit in front of orchestrator** | **Cannot depend on services** |
-
-### Service Architecture
-
-**In-Process Design (Current):**
-- Services run within the orchestrator process
-- Share the same gRPC port as the orchestrator
-- Direct function calls for maximum performance
-- Single deployment unit
-
-**Migration-Ready Design:**
-- Each service has its own proto definitions
-- Business logic is process-agnostic
-- Can be moved to separate processes when scaling demands it
-- Same service implementation works both in-process and remote
-
-### Service Responsibilities
-
-**1. Cross-Cutting Functionality:**
-Services provide shared capabilities that multiple modules need:
-
-- **Config Service**: "Discover modules needing configuration and manage their settings"
-- **Web UI Service**: "Provide dashboard interface for all system components"
-
-**2. Shared Infrastructure:**
-Services manage common resources and provide unified interfaces:
-- **Event-Driven Configuration**: Config service listens to orchestrator events and manages module configuration directly
-- **User Interface**: Unified control plane for the entire system
-
-**3. Service Architecture Patterns:**
-Services use orchestrator APIs and connect directly to modules when needed:
-- **Event Subscription**: Services subscribe to orchestrator events for module discovery
-- **Direct Connection**: Services connect directly to modules for specialized operations (e.g., configuration)
-- **Orchestrator Integration**: Services use standard orchestrator APIs (ListModules, SubscribeToEvents)
-
-### Module Responsibilities
-
-**1. Entity Provision:**
-Modules register what entity types they can provide, then create/manage entity instances on demand:
-
-- Module advertises: "I can provide converter and video_source entities"
-- Orchestrator requests: "Create a converter entity for this RTSP stream"
-- Module responds: "Created converter entity 'go2rtc_conv_123' with WebRTC output"
-
-**2. Entity Lifecycle Management:**
-- **Create**: Set up new entity instances (configure new camera stream)
-- **Configure**: Modify entity settings (change stream quality)  
-- **Monitor**: Report entity health and performance metrics
-- **Destroy**: Clean up entity resources when no longer needed
-
-**3. Protocol Translation:**
-Modules bridge between the orchestrator's abstract entity model and real-world systems:
-- **go2rtc module**: "Create converter" → go2rtc HTTP API calls
-- **matrix module**: "Join call" → matrix-js-sdk method calls
-- **chromecast module**: "Start casting" → pychromecast commands
-
-### Module Independence
-
-**Process Isolation:**
-- Each module runs in its own process space
-- Module crashes don't affect other modules or the orchestrator
-- Modules can be written in any language
-- Modules can be restarted independently
-
-**Communication Boundaries:**
-- **Service ↔ Orchestrator**: Direct function calls (in-process) or gRPC (when migrated)
-- **Orchestrator ↔ Module**: gRPC for control plane (entity management, configuration)
-- **Module ↔ External Systems**: Native protocols (HTTP, Matrix, Cast protocol, etc.)
-- **Module ↔ Module**: Never directly - always coordinated through orchestrator
-- **Module ↔ Service**: **FORBIDDEN** - modules cannot depend on services
-
-**Communication Flow:**
-- **gRPC Method Calls**: Services → Orchestrator → Modules (for general operations)
-- **Direct gRPC Calls**: Services → Modules (for service-specific operations like configuration)
-- **Events**: Modules → Orchestrator → Services
-
-**Resource Management:**
-- Modules manage their own external dependencies (processes, client connections)
-- Orchestrator manages module processes (lifecycle, logging, monitoring)
-- Clear separation of concerns and responsibilities
-
-## Data Flow Examples
-
-### Module Configuration Flow
-
-```
-1. Module Startup: go2rtc module starts and orchestrator performs health check
-   ↓
-2. Status Update: Orchestrator receives module status via HealthCheck response
-   ↓
-3. Event Notification: Orchestrator sends status updates to config service
-   ↓
-4. Configuration Discovery: Config service connects to go2rtc module's gRPC port
-   ↓
-5. Schema Retrieval: Config service calls GetConfigSchema() directly on module
-   ↓
-6. Configuration Application: Config service calls ApplyConfig() with module settings
-   ↓
-7. Status Confirmation: Module reports updated state via subsequent health checks
-   ↓
-8. Event Notification: Orchestrator forwards status updates to config service
-```
-
-### Camera to Matrix Call Flow
-
-```
-1. User Request: "Start camera call to Matrix room"
-   ↓
-2. Orchestrator: Query entity registry
-   - Source: "reolink_front_door" (go2rtc module)
-   - Target: "matrix_main" (matrix module)
-   - Path: Camera → go2rtc converter → Matrix protocol
-   ↓
-3. Orchestrator: Send gRPC requests to modules
-   - go2rtc module: "Create converter entity for RTSP stream"
-   - matrix module: "Join room and accept WebRTC stream"
-   ↓
-4. Modules: Execute using native APIs
-   - go2rtc module → go2rtc HTTP API → RTSP camera
-   - matrix module → matrix-js-sdk → Matrix homeserver
-   ↓
-5. Media Flow: Camera → go2rtc → WebRTC → Matrix → Remote participant
-```
-
-### Module Perspective
-
-**From go2rtc module's view:**
-1. "Orchestrator started me on port 50051"
-2. "I respond to health checks with my current state and capabilities"
-3. "Orchestrator asked me to create converter for rtsp://camera/stream"
-4. "I configured go2rtc via HTTP API and created entity 'conv_123'"
-5. "I'm monitoring the stream and reporting status via health checks"
-
-**From matrix module's view:**  
-1. "Orchestrator started me on port 50052"
-2. "I respond to health checks with my calling_protocol capability for Matrix"
-3. "Orchestrator asked me to join room with WebRTC stream URL"
-4. "I used matrix-js-sdk to authenticate and join the call"
-5. "I'm handling call signaling and reporting status via health checks"
-
-## Benefits
-
-**For Module Developers:**
-- **Language Freedom**: Use the best language/libraries for each domain
-- **Simple Contract**: Just implement the gRPC service interface
-- **Independent Development**: Develop and test modules in isolation
-- **Native APIs**: Use each system's preferred SDK without translation layers
-
-**For System Operators:**
-- **Centralized Management**: Single point for process lifecycle and logging
-- **Simple Deployment**: Drop module directory and restart orchestrator
-- **Clear Dependencies**: Explicit dependency declarations in manifests
-- **Easy Debugging**: Process isolation makes issues easier to isolate
-
-**For System Architecture:**
-- **Fault Tolerance**: Module failures are contained and recoverable  
-- **Horizontal Scaling**: Modules can run on different machines if needed
-- **Extensibility**: Add new capabilities without changing core system
-- **Maintainability**: Clean separation of concerns and responsibilities
-
-This architecture enables building a complex multi-protocol video calling system from simple, focused, language-agnostic modules that can be developed and maintained independently.
+1. Orchestrator finds capable modules
+2. Creates entities via gRPC calls
+3. Modules use native APIs (go2rtc HTTP, matrix-js-sdk)
+4. Media flows outside gRPC (direct protocols)
