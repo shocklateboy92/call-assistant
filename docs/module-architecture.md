@@ -104,7 +104,9 @@ For each module in dependency order:
 4. Capture stdout/stderr for centralized logging
 5. Wait for module to start gRPC server on assigned port
 6. Call RegisterModule() RPC to discover entities and capabilities
-7. Mark module as ready and proceed to next module
+7. Module reports STARTING state, then WAITING_FOR_CONFIG if it needs configuration
+8. Services (via orchestrator) provide configuration if needed
+9. Module reports READY state and proceed to next module
 ```
 
 ### 3. Process Management
@@ -153,6 +155,7 @@ A **service** is a **shared capability** that provides common functionality to m
 | **Examples** | Config, Web UI | go2rtc, Matrix, Chromecast |
 | **Communication** | Direct function calls (in-process) | gRPC (across processes) |
 | **Lifecycle** | Managed by orchestrator startup | Managed by orchestrator discovery |
+| **Dependencies** | **Services sit in front of orchestrator** | **Cannot depend on services** |
 
 ### Service Architecture
 
@@ -217,10 +220,15 @@ Modules bridge between the orchestrator's abstract entity model and real-world s
 - Modules can be restarted independently
 
 **Communication Boundaries:**
+- **Service ↔ Orchestrator**: Direct function calls (in-process) or gRPC (when migrated)
 - **Orchestrator ↔ Module**: gRPC for control plane (entity management, configuration)
 - **Module ↔ External Systems**: Native protocols (HTTP, Matrix, Cast protocol, etc.)
 - **Module ↔ Module**: Never directly - always coordinated through orchestrator
-- **Module ↔ Service**: gRPC calls to orchestrator (services share orchestrator's gRPC port)
+- **Module ↔ Service**: **FORBIDDEN** - modules cannot depend on services
+
+**Communication Flow:**
+- **gRPC Method Calls**: Services → Orchestrator → Modules
+- **Events**: Modules → Orchestrator → Services
 
 **Resource Management:**
 - Modules manage their own external dependencies (processes, client connections)
