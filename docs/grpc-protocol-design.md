@@ -5,9 +5,39 @@
 Based on the architecture requirements, here's the high-level design for the gRPC communication protocol:
 
 ### **Communication Pattern**
-- **Orchestrator as Client**: Makes RPC calls to modules
+- **Services as Clients**: Services make RPC calls through the orchestrator
+- **Orchestrator as Broker**: Forwards calls to modules and events to services
 - **Modules as Servers**: Each module runs a gRPC server on assigned port
-- **Bidirectional Communication**: Control commands (orchestrator→module) + status/events (module→orchestrator)
+- **Bidirectional Communication**: Control commands (service→orchestrator→module) + status/events (module→orchestrator→service)
+
+### **Communication Flow**
+
+```mermaid
+sequenceDiagram
+    participant S as Service
+    participant O as Orchestrator
+    participant M as Module
+    
+    Note over S,M: gRPC Method Calls (Services → Orchestrator → Modules)
+    S->>O: gRPC call (method invocation)
+    O->>M: gRPC call (forwarded)
+    M->>O: Response
+    O->>S: Response (forwarded)
+    
+    Note over S,M: Events (Modules → Orchestrator → Services)
+    M->>O: ReportEvent() / ReportStatus()
+    O->>S: Event notification
+    
+    Note over S,M: Health Monitoring
+    O->>M: HealthCheck()
+    M->>O: ModuleStatus
+    O->>S: Status update
+```
+
+**Key Principles:**
+- **Services** sit in front of orchestrator and initiate actions
+- **Modules** cannot depend on services - they only communicate with orchestrator
+- **Orchestrator** acts as a broker, forwarding calls and events between services and modules
 
 ### **Core Services**
 
@@ -56,40 +86,45 @@ Based on the architecture requirements, here's the high-level design for the gRP
 2. Orchestrator starts module process with `GRPC_PORT` env var
 3. Module starts gRPC server on assigned port
 4. Orchestrator calls `RegisterModule()` → Module responds with `ModuleInfo` + capabilities
-5. Orchestrator calls `HealthCheck()` to verify module is ready
-6. Module marked as `READY` in orchestrator registry
+5. Module reports `STARTING` state initially
+6. If module needs configuration, it reports `WAITING_FOR_CONFIG` state
+7. Config service (via orchestrator) provides configuration if needed
+8. Module reports `READY` state when fully initialized
+9. Orchestrator calls `HealthCheck()` to verify module is ready
 
 ### **2. Entity Creation Flow**
-1. Orchestrator determines need for entity (e.g., RTSP source)
-2. Orchestrator finds capable module via capability matching
-3. Orchestrator calls `EntityService.CreateEntity()` → Request: `entity_type`, `configuration` → Response: `EntityDefinition` with assigned ID
+1. Service determines need for entity (e.g., RTSP source)
+2. Service calls orchestrator to find capable module via capability matching
+3. Service calls orchestrator → orchestrator calls `EntityService.CreateEntity()` → Request: `entity_type`, `configuration` → Response: `EntityDefinition` with assigned ID
 4. Module creates entity instance and returns status
-5. Orchestrator calls `ConfigureEntity()` if additional setup needed
+5. Service calls orchestrator → orchestrator calls `ConfigureEntity()` if additional setup needed
 6. Entity marked as `READY` for pipeline use
 
 ### **3. Pipeline Construction Flow**
-1. Orchestrator calculates optimal path (source → converters → target)
-2. For each connection in path:
+1. Service requests pipeline creation from orchestrator
+2. Orchestrator calculates optimal path (source → converters → target)
+3. For each connection in path:
    a. Orchestrator calls `PipelineService.ConnectEntities()`
    b. Module validates compatibility and creates connection
    c. Module returns `Connection` with actual parameters
-3. Orchestrator calls `StartFlow()` to begin media flow
-4. Modules coordinate media transport (outside gRPC)
-5. Orchestrator monitors flow via `GetFlowStatus()`
+4. Orchestrator calls `StartFlow()` to begin media flow
+5. Modules coordinate media transport (outside gRPC)
+6. Orchestrator monitors flow via `GetFlowStatus()` and reports back to services
 
 ### **4. Health Monitoring Flow**
 1. Orchestrator periodically calls `HealthCheck()` on each module
 2. Modules report `ModuleStatus` + entity health
 3. Modules proactively call `EventService.ReportEvent()` for issues
-4. Orchestrator correlates health data and triggers recovery actions
-5. Failed modules are restarted, entities are recreated
+4. Orchestrator correlates health data and forwards events to services
+5. Services can request orchestrator to trigger recovery actions
+6. Failed modules are restarted, entities are recreated
 
 ### **5. Dynamic Configuration Flow**
-1. Configuration change needed (e.g., quality adjustment)
-2. Orchestrator calls `PipelineService.AdjustQuality()`
+1. Service determines configuration change needed (e.g., quality adjustment)
+2. Service calls orchestrator → orchestrator calls `PipelineService.AdjustQuality()`
 3. Module updates active flow parameters
 4. Module calls `EventService.ReportStatus()` to confirm change
-5. Orchestrator updates flow state and metrics
+5. Orchestrator updates flow state and forwards status to services
 
 ## Design Strengths
 
