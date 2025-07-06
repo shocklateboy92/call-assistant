@@ -6,11 +6,6 @@ import (
 	"os"
 )
 
-const (
-	SynapseURL   = "http://synapse:8008"
-	TestPassword = "TestPassword123"
-)
-
 func main() {
 	fmt.Println("🚀 Call Assistant Scenario")
 	fmt.Println("═══════════════════════════════════════════════════════════════")
@@ -46,9 +41,7 @@ func runMatrixSetup() {
 	// Create test users
 	fmt.Println("Creating test users...")
 
-	users := []string{"alice", "bob"}
-
-	for _, username := range users {
+	for _, username := range Users {
 		if err := client.CreateUser(username, TestPassword); err != nil {
 			slog.Error("Failed to create user", "username", username, "error", err)
 			os.Exit(1)
