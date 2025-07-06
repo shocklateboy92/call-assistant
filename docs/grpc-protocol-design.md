@@ -5,10 +5,11 @@
 Based on the architecture requirements, here's the high-level design for the gRPC communication protocol:
 
 ### **Communication Pattern**
-- **Services as Clients**: Services make RPC calls through the orchestrator
-- **Orchestrator as Broker**: Forwards calls to modules and events to services
+- **Services as Clients**: Services use orchestrator APIs and connect directly to modules when needed
+- **Orchestrator as Broker**: Forwards general calls to modules and events to services
+- **Direct Service-Module Communication**: Services connect directly to modules for specialized operations
 - **Modules as Servers**: Each module runs a gRPC server on assigned port
-- **Bidirectional Communication**: Control commands (service→orchestrator→module) + status/events (module→orchestrator→service)
+- **Bidirectional Communication**: General commands (service→orchestrator→module) + direct calls (service→module) + events (module→orchestrator→service)
 
 ### **Communication Flow**
 
@@ -18,26 +19,36 @@ sequenceDiagram
     participant O as Orchestrator
     participant M as Module
     
-    Note over S,M: gRPC Method Calls (Services → Orchestrator → Modules)
-    S->>O: gRPC call (method invocation)
+    Note over S,M: Service Discovery (Services use Orchestrator APIs)
+    S->>O: ListModules() / SubscribeToEvents()
+    O->>S: ModuleInfo (includes grpc_address)
+    
+    Note over S,M: General Operations (Services → Orchestrator → Modules)
+    S->>O: gRPC call (general operations)
     O->>M: gRPC call (forwarded)
     M->>O: Response
     O->>S: Response (forwarded)
     
+    Note over S,M: Direct Operations (Services → Modules)
+    S->>M: Direct gRPC call (e.g., GetConfigSchema)
+    M->>S: Direct response
+    
     Note over S,M: Events (Modules → Orchestrator → Services)
     M->>O: ReportEvent() / ReportStatus()
-    O->>S: Event notification
+    O->>S: Event notification (via stream)
     
     Note over S,M: Health Monitoring
     O->>M: HealthCheck()
     M->>O: ModuleStatus
-    O->>S: Status update
+    O->>S: Status update (via stream)
 ```
 
 **Key Principles:**
-- **Services** sit in front of orchestrator and initiate actions
-- **Modules** cannot depend on services - they only communicate with orchestrator
-- **Orchestrator** acts as a broker, forwarding calls and events between services and modules
+- **Services** use orchestrator APIs for module discovery and general operations
+- **Services** can connect directly to modules for specialized service-specific operations
+- **Modules** cannot depend on services - they only communicate with orchestrator (and respond to direct service calls)
+- **Orchestrator** provides module discovery, lifecycle management, and event distribution
+- **Module Discovery**: Services use `ModuleInfo.grpc_address` from orchestrator to connect directly
 
 ### **Core Services**
 
@@ -88,9 +99,10 @@ sequenceDiagram
 4. Orchestrator calls `RegisterModule()` → Module responds with `ModuleInfo` + capabilities
 5. Module reports `STARTING` state initially
 6. If module needs configuration, it reports `WAITING_FOR_CONFIG` state
-7. Config service (via orchestrator) provides configuration if needed
-8. Module reports `READY` state when fully initialized
-9. Orchestrator calls `HealthCheck()` to verify module is ready
+7. Config service (subscribed to orchestrator events) detects new module
+8. Config service connects directly to module's gRPC port and provides configuration
+9. Module reports `READY` state when fully initialized
+10. Orchestrator calls `HealthCheck()` to verify module is ready
 
 ### **2. Entity Creation Flow**
 1. Service determines need for entity (e.g., RTSP source)
@@ -120,11 +132,18 @@ sequenceDiagram
 6. Failed modules are restarted, entities are recreated
 
 ### **5. Dynamic Configuration Flow**
-1. Service determines configuration change needed (e.g., quality adjustment)
-2. Service calls orchestrator → orchestrator calls `PipelineService.AdjustQuality()`
-3. Module updates active flow parameters
+1. Service determines configuration change needed (e.g., module reconfiguration)
+2. Service connects directly to module and calls `ConfigurableModuleService.ApplyConfig()`
+3. Module updates configuration and validates changes
 4. Module calls `EventService.ReportStatus()` to confirm change
-5. Orchestrator updates flow state and forwards status to services
+5. Orchestrator forwards status update to services via event streams
+
+### **6. Service-Specific Operations Flow**
+1. Service needs to perform specialized operation (e.g., get configuration schema)
+2. Service uses `ModuleInfo.grpc_address` from orchestrator to connect directly
+3. Service calls module-specific service methods (e.g., `ConfigurableModuleService`)
+4. Module responds directly to service
+5. No orchestrator involvement needed for service-specific protocols
 
 ## Design Strengths
 
@@ -133,6 +152,8 @@ sequenceDiagram
 - **Capability-Driven**: Dynamic discovery and matching of module capabilities
 - **Extensible**: Easy to add new entity types and services
 - **Resilient**: Built-in health monitoring and error reporting
+- **Flexible Communication**: Services can use orchestrator APIs or connect directly to modules as needed
+- **No Duplication**: Services reuse orchestrator's module discovery instead of implementing their own
 
 ## Communication Flow
 

@@ -17,9 +17,6 @@ service ModuleService {
   // HealthCheck is called periodically by the orchestrator to monitor module health
   rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
   
-  // Configure is called to update module configuration at runtime
-  rpc Configure(ConfigureRequest) returns (ConfigureResponse);
-  
   // Shutdown is called to gracefully stop the module
   rpc Shutdown(ShutdownRequest) returns (ShutdownResponse);
   

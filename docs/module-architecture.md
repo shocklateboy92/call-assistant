@@ -105,8 +105,9 @@ For each module in dependency order:
 5. Wait for module to start gRPC server on assigned port
 6. Call RegisterModule() RPC to discover entities and capabilities
 7. Module reports STARTING state, then WAITING_FOR_CONFIG if it needs configuration
-8. Services (via orchestrator) provide configuration if needed
-9. Module reports READY state and proceed to next module
+8. Config service (listening to orchestrator events) detects new module
+9. Config service connects directly to module and provides configuration if needed
+10. Module reports READY state and proceed to next module
 ```
 
 ### 3. Process Management
@@ -176,19 +177,19 @@ A **service** is a **shared capability** that provides common functionality to m
 **1. Cross-Cutting Functionality:**
 Services provide shared capabilities that multiple modules need:
 
-- **Config Service**: "Store/retrieve configuration values for any module"
+- **Config Service**: "Discover modules needing configuration and manage their settings"
 - **Web UI Service**: "Provide dashboard interface for all system components"
 
 **2. Shared Infrastructure:**
 Services manage common resources and provide unified interfaces:
-- **Centralized Configuration**: Single source of truth for all settings
+- **Event-Driven Configuration**: Config service listens to orchestrator events and manages module configuration directly
 - **User Interface**: Unified control plane for the entire system
 
-**3. Migration Flexibility:**
-Services are designed to be moved to separate processes when needed:
-- **In-Process**: Direct function calls for maximum performance
-- **Remote**: gRPC calls when scaling or isolation is required
-- **Hybrid**: Mix of in-process and remote based on requirements
+**3. Service Architecture Patterns:**
+Services use orchestrator APIs and connect directly to modules when needed:
+- **Event Subscription**: Services subscribe to orchestrator events for module discovery
+- **Direct Connection**: Services connect directly to modules for specialized operations (e.g., configuration)
+- **Orchestrator Integration**: Services use standard orchestrator APIs (ListModules, SubscribeToEvents)
 
 ### Module Responsibilities
 
@@ -227,7 +228,8 @@ Modules bridge between the orchestrator's abstract entity model and real-world s
 - **Module ↔ Service**: **FORBIDDEN** - modules cannot depend on services
 
 **Communication Flow:**
-- **gRPC Method Calls**: Services → Orchestrator → Modules
+- **gRPC Method Calls**: Services → Orchestrator → Modules (for general operations)
+- **Direct gRPC Calls**: Services → Modules (for service-specific operations like configuration)
 - **Events**: Modules → Orchestrator → Services
 
 **Resource Management:**
@@ -235,7 +237,25 @@ Modules bridge between the orchestrator's abstract entity model and real-world s
 - Orchestrator manages module processes (lifecycle, logging, monitoring)
 - Clear separation of concerns and responsibilities
 
-## Data Flow Example
+## Data Flow Examples
+
+### Module Configuration Flow
+
+```
+1. Module Registration: go2rtc module starts and registers with orchestrator
+   ↓
+2. Event Notification: Orchestrator sends ModuleStartedEvent to config service
+   ↓
+3. Configuration Discovery: Config service connects to go2rtc module's gRPC port
+   ↓
+4. Schema Retrieval: Config service calls GetConfigSchema() directly on module
+   ↓
+5. Configuration Application: Config service calls ApplyConfig() with module settings
+   ↓
+6. State Change: Module transitions from WAITING_FOR_CONFIG to READY
+   ↓
+7. Event Notification: Orchestrator notifies config service of state change
+```
 
 ### Camera to Matrix Call Flow
 

@@ -42,19 +42,13 @@ message ModuleStatus {
   google.protobuf.Timestamp last_heartbeat = 4;
 }
 
-message ModuleCapabilities {
-  repeated string supported_protocols = 1;
-  repeated string supported_codecs = 2;
-  repeated string features = 3;
-}
-
 message ModuleInfo {
   string id = 1;
   string name = 2;
   string version = 3;
   string description = 4;
-  ModuleCapabilities capabilities = 5;
   ModuleStatus status = 6;
+  string grpc_address = 7;  // e.g., "localhost:50051"
 }
 
 

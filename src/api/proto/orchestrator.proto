@@ -1,0 +1,105 @@
+syntax = "proto3";
+
+package call_assistant.orchestrator;
+
+option go_package = "github.com/shocklateboy92/call-assistant/src/api/proto/orchestrator";
+
+import "common.proto";
+import "events.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+
+// OrchestratorService is the main service provided by the orchestrator
+// Services use this to interact with modules through the orchestrator
+service OrchestratorService {
+  // Module management
+  rpc ListModules(google.protobuf.Empty) returns (ListModulesResponse);
+  rpc GetModuleInfo(GetModuleInfoRequest) returns (GetModuleInfoResponse);
+  rpc RestartModule(RestartModuleRequest) returns (RestartModuleResponse);
+  rpc ShutdownModule(ShutdownModuleRequest) returns (ShutdownModuleResponse);
+  
+  
+  // Event subscription for services
+  rpc SubscribeToEvents(SubscribeToEventsRequest) returns (stream call_assistant.events.Event);
+  rpc SubscribeToStatusUpdates(SubscribeToStatusRequest) returns (stream call_assistant.common.StatusUpdate);
+  rpc SubscribeToMetrics(SubscribeToMetricsRequest) returns (stream call_assistant.common.Metrics);
+}
+
+// Module management messages
+message ListModulesResponse {
+  repeated call_assistant.common.ModuleInfo modules = 1;
+}
+
+message GetModuleInfoRequest {
+  string module_id = 1;
+}
+
+message GetModuleInfoResponse {
+  bool success = 1;
+  string error_message = 2;
+  call_assistant.common.ModuleInfo module_info = 3;
+}
+
+message RestartModuleRequest {
+  string module_id = 1;
+  bool force = 2;  // Force restart even if module is healthy
+  int32 timeout_seconds = 3;  // Timeout for graceful shutdown
+}
+
+message RestartModuleResponse {
+  bool success = 1;
+  string error_message = 2;
+  string new_process_id = 3;
+  int32 new_grpc_port = 4;
+}
+
+message ShutdownModuleRequest {
+  string module_id = 1;
+  bool force = 2;  // Force shutdown immediately
+  int32 timeout_seconds = 3;  // Timeout for graceful shutdown
+}
+
+message ShutdownModuleResponse {
+  bool success = 1;
+  string error_message = 2;
+  bool was_graceful = 3;
+  int32 exit_code = 4;
+}
+
+// Event subscription messages
+message SubscribeToEventsRequest {
+  repeated string filter_module_ids = 1;  // Empty = all modules
+  repeated call_assistant.events.EventSeverity severities = 2;  // Empty = all severities
+  repeated string filter_event_types = 3;  // Empty = all event types
+}
+
+message SubscribeToStatusRequest {
+  repeated string filter_module_ids = 1;  // Empty = all modules
+  repeated call_assistant.common.ModuleState states = 2;  // Empty = all states
+}
+
+message SubscribeToMetricsRequest {
+  repeated string filter_module_ids = 1;  // Empty = all modules
+  repeated string filter_metric_names = 2;  // Empty = all metrics
+  int32 interval_seconds = 3;  // How often to receive metrics (0 = real-time)
+}
+
+// Internal messages for orchestrator operation
+message ModuleRegistration {
+  string module_id = 1;
+  string process_id = 2;
+  int32 grpc_port = 3;
+  call_assistant.common.ModuleInfo module_info = 4;
+  google.protobuf.Timestamp registered_at = 5;
+}
+
+message ModuleProcess {
+  string module_id = 1;
+  string process_id = 2;
+  int32 grpc_port = 3;
+  string working_directory = 4;
+  repeated string command_args = 5;
+  map<string, string> environment = 6;
+  google.protobuf.Timestamp started_at = 7;
+  call_assistant.common.ModuleState state = 8;
+}
