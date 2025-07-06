@@ -143,8 +143,21 @@ func runOrchestrator(ctx context.Context, modulesDir string, devMode bool, verbo
 
 	slog.Info("All modules started successfully")
 
-	// Phase 5: Status Monitoring
-	fmt.Println("\n📊 Phase 5: Status Monitoring")
+	// Phase 5: Start gRPC Server
+	fmt.Println("\n🌐 Phase 5: Starting gRPC Server")
+	fmt.Println("───────────────────────────────────────────────────────────────")
+
+	orchestratorService := internal.NewOrchestratorService(registry, manager)
+
+	// Start gRPC server in goroutine
+	go func() {
+		if err := orchestratorService.StartGRPCServer(ctx, 9090); err != nil {
+			slog.Error("gRPC server error", "error", err)
+		}
+	}()
+
+	// Phase 6: Status Monitoring
+	fmt.Println("\n📊 Phase 6: Status Monitoring")
 	fmt.Println("───────────────────────────────────────────────────────────────")
 
 	// Start status monitoring routine

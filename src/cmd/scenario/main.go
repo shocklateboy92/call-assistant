@@ -12,8 +12,28 @@ const (
 )
 
 func main() {
-	fmt.Println("🚀 Setting up Synapse test users...")
+	fmt.Println("🚀 Call Assistant Scenario")
+	fmt.Println("═══════════════════════════════════════════════════════════════")
 
+	// Step 1: Set up Matrix test users
+	fmt.Println("Step 1: Setting up Matrix test users...")
+	fmt.Println("───────────────────────────────────────────────────────────────")
+	runMatrixSetup()
+
+	// Step 2: Test orchestrator service
+	fmt.Println("\nStep 2: Testing orchestrator service...")
+	fmt.Println("───────────────────────────────────────────────────────────────")
+	err := TestOrchestratorService()
+	if err != nil {
+		slog.Error("Orchestrator service test failed", "error", err)
+		os.Exit(1)
+	}
+
+	fmt.Println("\n🎉 Scenario completed successfully!")
+	fmt.Println("═══════════════════════════════════════════════════════════════")
+}
+
+func runMatrixSetup() {
 	// Create Matrix client
 	client := NewMatrixClient(SynapseURL)
 
@@ -35,5 +55,5 @@ func main() {
 		}
 	}
 
-	fmt.Println("🎉 Setup complete!")
+	fmt.Println("✅ Matrix setup complete!")
 }
