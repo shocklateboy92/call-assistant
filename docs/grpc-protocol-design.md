@@ -53,13 +53,13 @@ sequenceDiagram
 ### **Core Services**
 
 #### **1. ModuleService** (provided by each module)
-**Purpose**: Module lifecycle, registration, and health management
+**Purpose**: Module lifecycle and health management
 
 **Key Operations**:
-- `RegisterModule()` - Initial registration with capabilities
-- `HealthCheck()` - Regular health monitoring
-- `Configure()` - Runtime configuration updates
+- `HealthCheck()` - Regular health monitoring and status reporting
 - `Shutdown()` - Graceful shutdown coordination
+
+**Note**: The `RegisterModule()` method has been removed as the orchestrator constructs all module information from `module.yaml` files and health check responses.
 
 #### **2. EntityService** (provided by each module)
 **Purpose**: Entity lifecycle management within the module
@@ -92,17 +92,17 @@ sequenceDiagram
 
 ## Key Interaction Patterns
 
-### **1. Module Startup and Registration Flow**
-1. Orchestrator discovers module via directory scan
+### **1. Module Startup and Health Check Flow**
+1. Orchestrator discovers module via directory scan of `module.yaml` files
 2. Orchestrator starts module process with `GRPC_PORT` env var
 3. Module starts gRPC server on assigned port
-4. Orchestrator calls `RegisterModule()` → Module responds with `ModuleInfo` + capabilities
-5. Module reports `STARTING` state initially
-6. If module needs configuration, it reports `WAITING_FOR_CONFIG` state
-7. Config service (subscribed to orchestrator events) detects new module
-8. Config service connects directly to module's gRPC port and provides configuration
-9. Module reports `READY` state when fully initialized
-10. Orchestrator calls `HealthCheck()` to verify module is ready
+4. Orchestrator establishes gRPC connection and calls `HealthCheck()` with retry logic
+5. Module responds with current state (e.g., `READY`, `STARTING`, `ERROR`)
+6. Orchestrator updates module status based on health check response
+7. Config service (subscribed to orchestrator events) detects module status changes
+8. Config service connects directly to module's gRPC port and provides configuration if needed
+9. Module continues to respond to health checks with updated status
+10. Orchestrator uses health check responses for ongoing monitoring
 
 ### **2. Entity Creation Flow**
 1. Service determines need for entity (e.g., RTSP source)
@@ -125,11 +125,11 @@ sequenceDiagram
 
 ### **4. Health Monitoring Flow**
 1. Orchestrator periodically calls `HealthCheck()` on each module
-2. Modules report `ModuleStatus` + entity health
-3. Modules proactively call `EventService.ReportEvent()` for issues
-4. Orchestrator correlates health data and forwards events to services
+2. Modules report `ModuleStatus` including current state and any error messages
+3. Orchestrator updates internal status based on health check responses
+4. Status changes are forwarded to services via event streams
 5. Services can request orchestrator to trigger recovery actions
-6. Failed modules are restarted, entities are recreated
+6. Failed modules are restarted, entities are recreated as needed
 
 ### **5. Dynamic Configuration Flow**
 1. Service determines configuration change needed (e.g., module reconfiguration)
@@ -182,24 +182,19 @@ ModuleInfo {
   name: string
   version: string
   description: string
-  capabilities: ModuleCapabilities
+  grpc_address: string           // e.g., "localhost:50051"
   status: ModuleStatus
 }
 
-ModuleCapabilities {
-  entity_types: [EntityType]      // VIDEO_SOURCE, VIDEO_SINK, CONVERTER, PROTOCOL
-  supported_protocols: [string]   // rtsp, webrtc, hls, chromecast, etc.
-  supported_codecs: [string]      // h264, vp8, opus, aac, etc.
-  features: [string]             // transcoding, scaling, recording, etc.
-}
-
 ModuleStatus {
-  state: ModuleState             // STARTING, READY, ERROR, STOPPING
+  state: ModuleState             // UNSPECIFIED, STARTING, READY, ERROR, STOPPING
   health: HealthStatus           // HEALTHY, DEGRADED, UNHEALTHY
   error_message: string
   last_heartbeat: timestamp
 }
 ```
+
+**Note**: Module capabilities and metadata are now derived from `module.yaml` files and health check responses rather than explicit registration calls.
 
 ### **Entity-Specific Messages**
 
