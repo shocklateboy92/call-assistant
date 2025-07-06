@@ -9,6 +9,7 @@
     "dev": "ts-node src/index.ts"
   },
   "dependencies": {
+    "ajv": "^8.17.1",
     "call-assistant-protos": "../../generated/typescript",
     "long": "^5.3.2",
     "nice-grpc": "^2.1.8",
