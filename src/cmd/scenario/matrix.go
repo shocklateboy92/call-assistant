@@ -191,3 +191,56 @@ func (mc *MatrixClient) CreateUser(username, password string) error {
 		string(body),
 	)
 }
+
+// GetAccessToken logs in and returns an access token for the given user
+func (mc *MatrixClient) GetAccessToken(username, password string) (string, error) {
+	url := fmt.Sprintf("%s/_matrix/client/r0/login", mc.baseURL)
+
+	loginReq := LoginRequest{
+		Type:     "m.login.password",
+		User:     username,
+		Password: password,
+	}
+
+	jsonData, err := json.Marshal(loginReq)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal login request: %w", err)
+	}
+
+	resp, err := mc.client.Post(url, "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return "", fmt.Errorf("failed to send login request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read login response: %w", err)
+	}
+
+	if resp.StatusCode == http.StatusOK {
+		var loginResp LoginResponse
+		if err := json.Unmarshal(body, &loginResp); err == nil && loginResp.AccessToken != "" {
+			return loginResp.AccessToken, nil
+		}
+	}
+
+	// Handle error response
+	var errorResp ErrorResponse
+	if err := json.Unmarshal(body, &errorResp); err == nil {
+		return "", fmt.Errorf("login failed: %s - %s", errorResp.ErrCode, errorResp.Error)
+	}
+
+	return "", fmt.Errorf("login failed: unexpected response (status %d): %s", resp.StatusCode, string(body))
+}
+
+// GetAccessToken is a helper function that gets an access token for a user
+func GetAccessToken(username string) string {
+	client := NewMatrixClient(SynapseURL)
+	token, err := client.GetAccessToken(username, TestPassword)
+	if err != nil {
+		slog.Error("Failed to get access token", "username", username, "error", err)
+		return ""
+	}
+	return token
+}

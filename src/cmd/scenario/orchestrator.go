@@ -193,7 +193,12 @@ func TestOrchestratorService() error {
 	}
 	
 	if dummyModule != nil {
-		err := configureDummyModule(dummyModule.GrpcAddress)
+		dummyConfig := fmt.Sprintf(`{
+			"username": "%s",
+			"password": "%s"
+		}`, Users[0], TestPassword)
+		
+		err := configureModule(dummyModule.GrpcAddress, "dummy", dummyConfig)
 		if err != nil {
 			slog.Error("Failed to configure dummy module", "error", err)
 		} else {
@@ -201,6 +206,53 @@ func TestOrchestratorService() error {
 		}
 	} else {
 		fmt.Println("❌ Dummy module not found")
+	}
+
+	// Step 6.5: Test Matrix module configuration validation
+	fmt.Println("\nStep 6.5: Testing Matrix module configuration...")
+	fmt.Println("───────────────────────────────────────────────────────────────")
+	
+	// Find the matrix module
+	var matrixModule *commonpb.ModuleInfo
+	for _, module := range listResp.Modules {
+		if module.Id == "matrix" {
+			matrixModule = module
+			break
+		}
+	}
+	
+	if matrixModule != nil {
+		// Test with bad credentials first
+		fmt.Println("  Testing with invalid credentials...")
+		badConfig := fmt.Sprintf(`{
+			"homeserver": "%s",
+			"accessToken": "bad_token",
+			"userId": "@%s:localhost"
+		}`, SynapseURL, Users[0])
+		
+		err := configureModule(matrixModule.GrpcAddress, "matrix", badConfig)
+		if err != nil {
+			fmt.Printf("✅ Matrix module correctly rejected invalid credentials: %v\n", err)
+		} else {
+			fmt.Println("❌ Matrix module should have rejected invalid credentials")
+		}
+		
+		// Now test with correct Alice credentials
+		fmt.Printf("  Testing with valid %s credentials...\n", Users[0])
+		aliceConfig := fmt.Sprintf(`{
+			"homeserver": "%s",
+			"accessToken": "%s",
+			"userId": "@%s:localhost"
+		}`, SynapseURL, GetAccessToken(Users[0]), Users[0])
+		
+		err = configureModule(matrixModule.GrpcAddress, "matrix", aliceConfig)
+		if err != nil {
+			slog.Error("Failed to configure matrix module with valid credentials", "error", err)
+		} else {
+			fmt.Printf("✅ Matrix module configured successfully with %s credentials\n", Users[0])
+		}
+	} else {
+		fmt.Println("❌ Matrix module not found")
 	}
 
 	// Step 7: Subscribe to events for a few seconds
@@ -241,19 +293,19 @@ func TestOrchestratorService() error {
 	return nil
 }
 
-func configureDummyModule(grpcAddress string) error {
-	// Connect to the dummy module directly
+func configureModule(grpcAddress, moduleName, configJson string) error {
+	// Connect to the module directly
 	conn, err := grpc.NewClient(
 		grpcAddress,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 	if err != nil {
-		return fmt.Errorf("failed to connect to dummy module: %w", err)
+		return fmt.Errorf("failed to connect to %s module: %w", moduleName, err)
 	}
 	defer conn.Close()
 
 	client := configpb.NewConfigurableModuleServiceClient(conn)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	// First, get the current config schema
@@ -269,15 +321,30 @@ func configureDummyModule(grpcAddress string) error {
 	
 	fmt.Printf("  Schema version: %s\n", schemaResp.Schema.SchemaVersion)
 	
-	// Apply alice credentials
-	fmt.Printf("  Applying %s credentials...\n", Users[0])
-	config := fmt.Sprintf(`{
-		"username": "%s",
-		"password": "%s"
-	}`, Users[0], TestPassword)
+	// First validate the config
+	fmt.Println("  Validating configuration...")
+	validateResp, err := client.ValidateConfig(ctx, &configpb.ValidateConfigRequest{
+		ConfigJson: configJson,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to validate config: %w", err)
+	}
 	
+	if !validateResp.Valid {
+		var errorDetails []string
+		for _, validationError := range validateResp.ValidationErrors {
+			errorDetails = append(errorDetails, fmt.Sprintf("%s: %s", 
+				validationError.FieldPath, validationError.ErrorMessage))
+		}
+		return fmt.Errorf("config validation failed: %v", errorDetails)
+	}
+	
+	fmt.Println("  ✅ Configuration validation passed")
+	
+	// Apply the configuration
+	fmt.Println("  Applying configuration...")
 	applyResp, err := client.ApplyConfig(ctx, &configpb.ApplyConfigRequest{
-		ConfigJson:    config,
+		ConfigJson:    configJson,
 		ConfigVersion: "1.0.0",
 	})
 	if err != nil {
