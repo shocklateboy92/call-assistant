@@ -20,14 +20,14 @@ type OrchestratorService struct {
 	orchestratorpb.UnimplementedOrchestratorServiceServer
 	registry *ModuleRegistry
 	manager  *ModuleManager
-	
+
 	// Event streaming
 	eventStreamsMu sync.RWMutex
 	eventStreams   map[string]chan *eventspb.Event
-	
+
 	statusStreamsMu sync.RWMutex
 	statusStreams   map[string]chan *commonpb.StatusUpdate
-	
+
 	metricsStreamsMu sync.RWMutex
 	metricsStreams   map[string]chan *commonpb.Metrics
 }
@@ -73,9 +73,12 @@ func (s *OrchestratorService) StartGRPCServer(ctx context.Context, port int) err
 }
 
 // ListModules returns all registered modules
-func (s *OrchestratorService) ListModules(ctx context.Context, req *emptypb.Empty) (*orchestratorpb.ListModulesResponse, error) {
+func (s *OrchestratorService) ListModules(
+	ctx context.Context,
+	req *emptypb.Empty,
+) (*orchestratorpb.ListModulesResponse, error) {
 	modules := s.registry.GetAllModules()
-	
+
 	var moduleInfos []*commonpb.ModuleInfo
 	for _, module := range modules {
 		moduleInfo := &commonpb.ModuleInfo{
@@ -84,17 +87,17 @@ func (s *OrchestratorService) ListModules(ctx context.Context, req *emptypb.Empt
 			Version:     module.Module.Manifest.Version,
 			Description: module.Module.Manifest.Description,
 			Status: &commonpb.ModuleStatus{
-				State:       s.convertModuleStatusToProto(module.Status),
-				Health:      commonpb.HealthStatus_HEALTH_STATUS_HEALTHY, // TODO: implement health tracking
+				State:        s.convertModuleStatusToProto(module.Status),
+				Health:       commonpb.HealthStatus_HEALTH_STATUS_HEALTHY, // TODO: implement health tracking
 				ErrorMessage: module.ErrorMsg,
 			},
 		}
-		
+
 		// Add gRPC address if module is running
 		if module.GRPCPort > 0 {
 			moduleInfo.GrpcAddress = fmt.Sprintf("localhost:%d", module.GRPCPort)
 		}
-		
+
 		moduleInfos = append(moduleInfos, moduleInfo)
 	}
 
@@ -104,7 +107,10 @@ func (s *OrchestratorService) ListModules(ctx context.Context, req *emptypb.Empt
 }
 
 // GetModuleInfo returns information about a specific module
-func (s *OrchestratorService) GetModuleInfo(ctx context.Context, req *orchestratorpb.GetModuleInfoRequest) (*orchestratorpb.GetModuleInfoResponse, error) {
+func (s *OrchestratorService) GetModuleInfo(
+	ctx context.Context,
+	req *orchestratorpb.GetModuleInfoRequest,
+) (*orchestratorpb.GetModuleInfoResponse, error) {
 	module, exists := s.registry.GetModule(req.ModuleId)
 	if !exists {
 		return &orchestratorpb.GetModuleInfoResponse{
@@ -119,12 +125,12 @@ func (s *OrchestratorService) GetModuleInfo(ctx context.Context, req *orchestrat
 		Version:     module.Module.Manifest.Version,
 		Description: module.Module.Manifest.Description,
 		Status: &commonpb.ModuleStatus{
-			State:       s.convertModuleStatusToProto(module.Status),
-			Health:      commonpb.HealthStatus_HEALTH_STATUS_HEALTHY, // TODO: implement health tracking
+			State:        s.convertModuleStatusToProto(module.Status),
+			Health:       commonpb.HealthStatus_HEALTH_STATUS_HEALTHY, // TODO: implement health tracking
 			ErrorMessage: module.ErrorMsg,
 		},
 	}
-	
+
 	// Add gRPC address if module is running
 	if module.GRPCPort > 0 {
 		moduleInfo.GrpcAddress = fmt.Sprintf("localhost:%d", module.GRPCPort)
@@ -137,7 +143,10 @@ func (s *OrchestratorService) GetModuleInfo(ctx context.Context, req *orchestrat
 }
 
 // RestartModule restarts a specific module
-func (s *OrchestratorService) RestartModule(ctx context.Context, req *orchestratorpb.RestartModuleRequest) (*orchestratorpb.RestartModuleResponse, error) {
+func (s *OrchestratorService) RestartModule(
+	ctx context.Context,
+	req *orchestratorpb.RestartModuleRequest,
+) (*orchestratorpb.RestartModuleResponse, error) {
 	// TODO: Implement module restart functionality
 	return &orchestratorpb.RestartModuleResponse{
 		Success:      false,
@@ -146,7 +155,10 @@ func (s *OrchestratorService) RestartModule(ctx context.Context, req *orchestrat
 }
 
 // ShutdownModule shuts down a specific module
-func (s *OrchestratorService) ShutdownModule(ctx context.Context, req *orchestratorpb.ShutdownModuleRequest) (*orchestratorpb.ShutdownModuleResponse, error) {
+func (s *OrchestratorService) ShutdownModule(
+	ctx context.Context,
+	req *orchestratorpb.ShutdownModuleRequest,
+) (*orchestratorpb.ShutdownModuleResponse, error) {
 	// TODO: Implement module shutdown functionality
 	return &orchestratorpb.ShutdownModuleResponse{
 		Success:      false,
@@ -155,7 +167,10 @@ func (s *OrchestratorService) ShutdownModule(ctx context.Context, req *orchestra
 }
 
 // SubscribeToEvents subscribes to module events
-func (s *OrchestratorService) SubscribeToEvents(req *orchestratorpb.SubscribeToEventsRequest, stream orchestratorpb.OrchestratorService_SubscribeToEventsServer) error {
+func (s *OrchestratorService) SubscribeToEvents(
+	req *orchestratorpb.SubscribeToEventsRequest,
+	stream orchestratorpb.OrchestratorService_SubscribeToEventsServer,
+) error {
 	// Create a channel for this subscription
 	eventChan := make(chan *eventspb.Event, 100)
 	streamID := fmt.Sprintf("events_%p", stream)
@@ -190,7 +205,10 @@ func (s *OrchestratorService) SubscribeToEvents(req *orchestratorpb.SubscribeToE
 }
 
 // SubscribeToStatusUpdates subscribes to module status updates
-func (s *OrchestratorService) SubscribeToStatusUpdates(req *orchestratorpb.SubscribeToStatusRequest, stream orchestratorpb.OrchestratorService_SubscribeToStatusUpdatesServer) error {
+func (s *OrchestratorService) SubscribeToStatusUpdates(
+	req *orchestratorpb.SubscribeToStatusRequest,
+	stream orchestratorpb.OrchestratorService_SubscribeToStatusUpdatesServer,
+) error {
 	// Create a channel for this subscription
 	statusChan := make(chan *commonpb.StatusUpdate, 100)
 	streamID := fmt.Sprintf("status_%p", stream)
@@ -225,7 +243,10 @@ func (s *OrchestratorService) SubscribeToStatusUpdates(req *orchestratorpb.Subsc
 }
 
 // SubscribeToMetrics subscribes to module metrics
-func (s *OrchestratorService) SubscribeToMetrics(req *orchestratorpb.SubscribeToMetricsRequest, stream orchestratorpb.OrchestratorService_SubscribeToMetricsServer) error {
+func (s *OrchestratorService) SubscribeToMetrics(
+	req *orchestratorpb.SubscribeToMetricsRequest,
+	stream orchestratorpb.OrchestratorService_SubscribeToMetricsServer,
+) error {
 	// Create a channel for this subscription
 	metricsChan := make(chan *commonpb.Metrics, 100)
 	streamID := fmt.Sprintf("metrics_%p", stream)
