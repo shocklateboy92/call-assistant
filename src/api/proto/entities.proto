@@ -1,0 +1,209 @@
+syntax = "proto3";
+
+package call_assistant.entities;
+
+option go_package = "github.com/shocklateboy92/call-assistant/src/api/proto/entities";
+
+import "google/protobuf/timestamp.proto";
+import "common.proto";
+
+// Entity state definitions
+enum EntityState {
+  ENTITY_STATE_UNSPECIFIED = 0;
+  ENTITY_STATE_CREATED = 1;
+  ENTITY_STATE_CONFIGURED = 2;
+  ENTITY_STATE_ACTIVE = 3;
+  ENTITY_STATE_ERROR = 4;
+  ENTITY_STATE_DESTROYED = 5;
+}
+
+enum MediaType {
+  MEDIA_TYPE_UNSPECIFIED = 0;
+  MEDIA_TYPE_AUDIO = 1;
+  MEDIA_TYPE_VIDEO = 2;
+}
+
+enum ConnectionStatus {
+  CONNECTION_STATUS_UNSPECIFIED = 0;
+  CONNECTION_STATUS_INITIALIZING = 1;
+  CONNECTION_STATUS_CONNECTED = 2;
+  CONNECTION_STATUS_DISCONNECTED = 3;
+  CONNECTION_STATUS_ERROR = 4;
+}
+
+enum FlowState {
+  FLOW_STATE_UNSPECIFIED = 0;
+  FLOW_STATE_INITIALIZING = 1;
+  FLOW_STATE_ACTIVE = 2;
+  FLOW_STATE_STOPPED = 3;
+  FLOW_STATE_ERROR = 4;
+}
+
+// Core data structures
+message Resolution {
+  int32 width = 1;
+  int32 height = 2;
+}
+
+message QualityProfile {
+  Resolution resolution = 1;
+  int32 bitrate = 2;
+  int32 framerate = 3;
+  string video_codec = 4;
+  string audio_codec = 5;
+}
+
+message MediaFormat {
+  string container = 1;           // mp4, webm, ts, raw
+  string video_codec = 2;
+  string audio_codec = 3;
+  Resolution resolution = 4;
+  int32 bitrate = 5;
+}
+
+message EntityCapabilities {
+  repeated string supported_protocols = 1;  // rtsp, webrtc, hls, etc.
+  repeated string supported_codecs = 2;     // h264, vp8, opus, aac, etc.
+  MediaType media_type = 3;                 // AUDIO, VIDEO
+  map<string, string> properties = 4;      // Additional capability metadata
+}
+
+message EntityStatus {
+  EntityState state = 1;                    // CREATED, CONFIGURED, ACTIVE, ERROR, DESTROYED
+  call_assistant.common.HealthStatus health = 2;  // HEALTHY, DEGRADED, UNHEALTHY
+  string error_message = 3;
+  repeated string active_connections = 4;   // Connection IDs
+  map<string, call_assistant.common.MetricValue> metrics = 5;
+  google.protobuf.Timestamp created_at = 6;
+  google.protobuf.Timestamp last_updated = 7;
+}
+
+// Entity definitions
+message MediaSource {
+  string id = 1;
+  string name = 2;
+  string type = 3;                          // rtsp, usb, hls, file, etc.
+  map<string, string> config = 4;          // Plugin-specific configuration
+  EntityStatus status = 5;
+  EntityCapabilities provides = 6;
+}
+
+message MediaSink {
+  string id = 1;
+  string name = 2;
+  string type = 3;                          // chromecast, miracast, airplay, display, etc.
+  map<string, string> config = 4;          // Plugin-specific configuration
+  EntityStatus status = 5;
+  EntityCapabilities requires = 6;
+}
+
+message Protocol {
+  string id = 1;
+  string name = 2;
+  string type = 3;                          // matrix, xmpp, webrtc, sip, etc.
+  map<string, string> config = 4;          // Plugin-specific configuration
+  EntityStatus status = 5;
+  EntityCapabilities requires_audio = 6;
+  EntityCapabilities requires_video = 7;
+}
+
+message Converter {
+  string id = 1;
+  string name = 2;
+  string type = 3;                          // go2rtc, ffmpeg, gstreamer, etc.
+  map<string, string> config = 4;          // Plugin-specific configuration
+  EntityStatus status = 5;
+  EntityCapabilities input = 6;
+  EntityCapabilities output = 7;
+}
+
+// Pipeline management
+message Connection {
+  string id = 1;
+  string source_entity_id = 2;
+  string target_entity_id = 3;
+  MediaType media_type = 4;                // AUDIO, VIDEO
+  string transport_protocol = 5;           // rtsp, webrtc, hls, etc.
+  QualityProfile quality = 6;
+  ConnectionStatus status = 7;
+  map<string, call_assistant.common.MetricValue> metrics = 8;
+}
+
+message Flow {
+  string id = 1;
+  string name = 2;
+  repeated Connection connections = 3;      // Ordered list forming the pipeline
+  FlowStatus status = 4;
+  map<string, call_assistant.common.MetricValue> metrics = 5;
+  google.protobuf.Timestamp created_at = 6;
+  google.protobuf.Timestamp started_at = 7;
+}
+
+message FlowStatus {
+  FlowState state = 1;                      // INITIALIZING, ACTIVE, STOPPED, ERROR
+  call_assistant.common.HealthStatus health = 2;
+  string error_message = 3;
+  int64 bandwidth_usage = 4;
+  int32 latency_ms = 5;
+}
+
+// EntityService requests and responses
+message CreateEntityRequest {
+  string entity_type = 1;                   // "media_source", "media_sink", "protocol", "converter"
+  map<string, string> configuration = 2;   // Initial configuration
+}
+
+message CreateEntityResponse {
+  bool success = 1;
+  string error_message = 2;
+  oneof entity {
+    MediaSource media_source = 3;
+    MediaSink media_sink = 4;
+    Protocol protocol = 5;
+    Converter converter = 6;
+  }
+}
+
+message ConfigureEntityRequest {
+  string entity_id = 1;
+  map<string, string> configuration = 2;
+}
+
+message ConfigureEntityResponse {
+  bool success = 1;
+  string error_message = 2;
+  EntityStatus status = 3;
+}
+
+message GetEntityStatusRequest {
+  string entity_id = 1;
+}
+
+message GetEntityStatusResponse {
+  bool success = 1;
+  string error_message = 2;
+  EntityStatus status = 3;
+}
+
+message DestroyEntityRequest {
+  string entity_id = 1;
+}
+
+message DestroyEntityResponse {
+  bool success = 1;
+  string error_message = 2;
+}
+
+message ListEntitiesRequest {
+  string entity_type_filter = 1;           // Optional filter by entity type
+  EntityState state_filter = 2;            // Optional filter by state
+}
+
+message ListEntitiesResponse {
+  bool success = 1;
+  string error_message = 2;
+  repeated MediaSource media_sources = 3;
+  repeated MediaSink media_sinks = 4;
+  repeated Protocol protocols = 5;
+  repeated Converter converters = 6;
+}

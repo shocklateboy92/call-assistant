@@ -16,6 +16,8 @@ import (
 	orchestratorpb "github.com/shocklateboy92/call-assistant/src/api/proto/orchestrator"
 	commonpb "github.com/shocklateboy92/call-assistant/src/api/proto/common"
 	configpb "github.com/shocklateboy92/call-assistant/src/generated/go/services"
+	modulepb "github.com/shocklateboy92/call-assistant/src/api/proto/module"
+	entitiespb "github.com/shocklateboy92/call-assistant/src/api/proto/entities"
 )
 
 func TestOrchestratorService() error {
@@ -250,6 +252,15 @@ func TestOrchestratorService() error {
 			slog.Error("Failed to configure matrix module with valid credentials", "error", err)
 		} else {
 			fmt.Printf("✅ Matrix module configured successfully with %s credentials\n", Users[0])
+			
+			// Test GetCallingProtocols after successful configuration
+			fmt.Println("  Testing GetCallingProtocols...")
+			err = testGetCallingProtocols(matrixModule.GrpcAddress)
+			if err != nil {
+				slog.Error("Failed to test GetCallingProtocols", "error", err)
+			} else {
+				fmt.Println("✅ GetCallingProtocols test passed")
+			}
 		}
 	} else {
 		fmt.Println("❌ Matrix module not found")
@@ -369,6 +380,52 @@ func configureModule(grpcAddress, moduleName, configJson string) error {
 	}
 	
 	fmt.Printf("  Current config: %s\n", getCurrentResp.ConfigJson)
+	
+	return nil
+}
+
+func testGetCallingProtocols(grpcAddress string) error {
+	// Connect to the module directly
+	conn, err := grpc.NewClient(
+		grpcAddress,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to connect to matrix module: %w", err)
+	}
+	defer conn.Close()
+
+	client := modulepb.NewModuleServiceClient(conn)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// List all entities
+	listResp, err := client.ListEntities(ctx, &entitiespb.ListEntitiesRequest{
+		EntityTypeFilter: "protocol",
+	})
+	if err != nil {
+		return fmt.Errorf("failed to list entities: %w", err)
+	}
+	
+	if !listResp.Success {
+		return fmt.Errorf("ListEntities failed: %s", listResp.ErrorMessage)
+	}
+	
+	fmt.Printf("    Found %d protocol(s):\n", len(listResp.Protocols))
+	for i, protocol := range listResp.Protocols {
+		fmt.Printf("      %d. %s (%s)\n", i+1, protocol.Name, protocol.Id)
+		fmt.Printf("         Type: %s\n", protocol.Type)
+		fmt.Printf("         State: %s\n", protocol.Status.State.String())
+		fmt.Printf("         Audio capabilities: %v\n", protocol.RequiresAudio.SupportedProtocols)
+		fmt.Printf("         Video capabilities: %v\n", protocol.RequiresVideo.SupportedProtocols)
+		if len(protocol.Config) > 0 {
+			fmt.Printf("         Config:\n")
+			for key, value := range protocol.Config {
+				fmt.Printf("           %s: %s\n", key, value)
+			}
+		}
+		fmt.Println()
+	}
 	
 	return nil
 }
