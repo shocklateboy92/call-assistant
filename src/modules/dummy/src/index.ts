@@ -37,11 +37,6 @@ class DummyModule implements ModuleServiceImplementation {
         name: 'Dummy Test Module',
         version: '1.0.0',
         description: 'A dummy module for testing orchestrator functionality',
-        capabilities: {
-          supported_protocols: ['dummy_protocol', 'test_protocol'],
-          supported_codecs: ['dummy_codec'],
-          features: ['testing', 'dummy_operations'],
-        },
         status: {
           state: ModuleState.MODULE_STATE_READY,
           health: HealthStatus.HEALTH_STATUS_HEALTHY,
@@ -123,11 +118,6 @@ class DummyModule implements ModuleServiceImplementation {
         name: 'Dummy Test Module',
         version: '1.0.0',
         description: 'A dummy module for testing orchestrator functionality',
-        capabilities: {
-          supported_protocols: ['dummy_protocol', 'test_protocol'],
-          supported_codecs: ['dummy_codec'],
-          features: ['testing', 'dummy_operations'],
-        },
         status: {
           state: ModuleState.MODULE_STATE_READY,
           health: HealthStatus.HEALTH_STATUS_HEALTHY,
