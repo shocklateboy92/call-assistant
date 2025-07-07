@@ -202,9 +202,19 @@ func (pm *PipelineManager) startConnection(connState *ConnectionState, runtimeCo
 		"media_type", conn.MediaType)
 	
 	// Determine which module should handle this connection
-	// For now, use the source module (could be more sophisticated)
+	// For protocol entities, use the target module (protocols initiate connections)
+	// For other connections, use the source module
 	moduleID := connState.SourceModuleID
 	targetModuleID := connState.TargetModuleID
+	
+	// Check if target entity is a protocol - if so, use target module
+	if targetEntityInfo := pm.mediaGraph.getEntityInfo(conn.TargetEntityId); targetEntityInfo != nil && targetEntityInfo.Type == "protocol" {
+		slog.Info("Using target module for protocol connection", 
+			"connection_id", conn.Id,
+			"target_entity_type", targetEntityInfo.Type,
+			"switching_to_module", targetModuleID)
+		moduleID = targetModuleID
+	}
 	
 	slog.Info("Connection module mapping",
 		"connection_id", conn.Id,

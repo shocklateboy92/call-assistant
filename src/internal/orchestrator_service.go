@@ -38,7 +38,12 @@ type OrchestratorService struct {
 }
 
 // NewOrchestratorService creates a new orchestrator service
-func NewOrchestratorService(registry *ModuleRegistry, manager *ModuleManager, mediaGraph *MediaGraphManager, pipelineManager *PipelineManager) *OrchestratorService {
+func NewOrchestratorService(
+	registry *ModuleRegistry,
+	manager *ModuleManager,
+	mediaGraph *MediaGraphManager,
+	pipelineManager *PipelineManager,
+) *OrchestratorService {
 	return &OrchestratorService{
 		registry:        registry,
 		manager:         manager,
@@ -355,7 +360,16 @@ func (s *OrchestratorService) ReportEvent(
 		"module_id", req.Event.SourceModuleId,
 		"event_id", req.Event.Id,
 		"severity", req.Event.Severity,
+		"event_type", (*req.Event).ProtoReflect().Type().Descriptor().FullName(),
 	)
+
+	// Check if this event indicates entities have changed and trigger discovery
+	if s.shouldTriggerDiscovery(req.Event) {
+		slog.Info("Event indicates entities may have changed, triggering discovery",
+			"module_id", req.Event.SourceModuleId,
+		)
+		s.mediaGraph.TriggerDiscovery()
+	}
 
 	// Broadcast the event to all subscribed streams
 	s.BroadcastEvent(req.Event)
@@ -482,9 +496,9 @@ func (s *OrchestratorService) StartPipeline(
 			slog.Error("Panic in StartPipeline", "panic", r, "pipeline_id", req.PipelineId)
 		}
 	}()
-	
+
 	slog.Info("OrchestratorService.StartPipeline called", "pipeline_id", req.PipelineId)
-	
+
 	result, err := s.pipelineManager.StartPipeline(req)
 	if err != nil {
 		slog.Error("PipelineManager.StartPipeline returned error", "error", err, "pipeline_id", req.PipelineId)
@@ -493,7 +507,7 @@ func (s *OrchestratorService) StartPipeline(
 	} else {
 		slog.Info("PipelineManager.StartPipeline succeeded", "pipeline_id", req.PipelineId)
 	}
-	
+
 	return result, err
 }
 
@@ -529,22 +543,31 @@ func (s *OrchestratorService) ListPipelines(
 	return s.pipelineManager.ListPipelines(req)
 }
 
-// AdjustQuality adjusts the quality of a pipeline connection
-func (s *OrchestratorService) AdjustQuality(
-	ctx context.Context,
-	req *pipelinepb.AdjustQualityRequest,
-) (*pipelinepb.AdjustQualityResponse, error) {
-	// TODO: Implement quality adjustment
-	return &pipelinepb.AdjustQualityResponse{
-		Success:      false,
-		ErrorMessage: "Quality adjustment not yet implemented",
-	}, nil
-}
-
 // CalculatePath calculates an optimal path between entities
 func (s *OrchestratorService) CalculatePath(
 	ctx context.Context,
 	req *pipelinepb.CalculatePathRequest,
 ) (*pipelinepb.CalculatePathResponse, error) {
 	return s.pipelineManager.CalculatePath(req)
+}
+
+// shouldTriggerDiscovery determines if an event should trigger entity discovery
+func (s *OrchestratorService) shouldTriggerDiscovery(event *eventspb.Event) bool {
+	// Trigger discovery for events that indicate entities have changed
+	switch event.EventData.(type) {
+	case *eventspb.Event_EntityCreated:
+		return true
+	case *eventspb.Event_EntityConfigured:
+		return true
+	case *eventspb.Event_EntityDestroyed:
+		return true
+	case *eventspb.Event_EntityStateChanged:
+		return true
+	case *eventspb.Event_ModuleConfigured:
+		return true
+	case *eventspb.Event_ModuleHealthChanged:
+		return true
+	default:
+		return false
+	}
 }

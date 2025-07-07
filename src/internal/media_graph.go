@@ -30,6 +30,7 @@ type MediaGraphManager struct {
 	// Discovery settings
 	discoveryInterval time.Duration
 	stopDiscovery     chan struct{}
+	triggerDiscovery  chan struct{}
 }
 
 // EntityInfo represents a discovered entity with its owning module
@@ -60,6 +61,7 @@ func NewMediaGraphManager(registry *ModuleRegistry) *MediaGraphManager {
 		pipelines:         make(map[string]*PipelineInfo),
 		discoveryInterval: 10 * time.Second,
 		stopDiscovery:     make(chan struct{}),
+		triggerDiscovery:  make(chan struct{}, 1), // Buffered to prevent blocking
 	}
 }
 
@@ -83,6 +85,9 @@ func (mgm *MediaGraphManager) StartDiscovery(ctx context.Context) {
 			return
 		case <-ticker.C:
 			mgm.discoverEntities()
+		case <-mgm.triggerDiscovery:
+			slog.Info("Triggered entity discovery due to event")
+			mgm.discoverEntities()
 		}
 	}
 }
@@ -90,6 +95,16 @@ func (mgm *MediaGraphManager) StartDiscovery(ctx context.Context) {
 // StopDiscovery stops the entity discovery process
 func (mgm *MediaGraphManager) StopDiscovery() {
 	close(mgm.stopDiscovery)
+}
+
+// TriggerDiscovery triggers an immediate entity discovery cycle
+func (mgm *MediaGraphManager) TriggerDiscovery() {
+	select {
+	case mgm.triggerDiscovery <- struct{}{}:
+		// Trigger sent successfully
+	default:
+		// Channel is full, discovery is already triggered
+	}
 }
 
 // discoverEntities queries all modules for their entities
@@ -377,4 +392,16 @@ func (mgm *MediaGraphManager) GetEntityModuleID(entityID string) (string, bool) 
 	}
 	
 	return entityInfo.ModuleID, true
+}
+
+func (mgm *MediaGraphManager) getEntityInfo(entityID string) *EntityInfo {
+	mgm.entitiesMu.RLock()
+	defer mgm.entitiesMu.RUnlock()
+	
+	entityInfo, exists := mgm.entities[entityID]
+	if !exists {
+		return nil
+	}
+	
+	return entityInfo
 }

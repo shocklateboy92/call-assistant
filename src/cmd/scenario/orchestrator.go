@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"strings"
 	"syscall"
 	"time"
 
@@ -259,7 +260,17 @@ func TestOrchestratorService() error {
 		} else {
 			fmt.Printf("✅ Matrix module configured successfully with %s credentials\n", Users[0])
 
-			// Test GetCallingProtocols after successful configuration
+			// Wait for Matrix module sync complete event after final configuration
+			fmt.Println("  Waiting for Matrix sync complete event after configuration...")
+			err = waitForMatrixSyncEvent(client)
+			if err != nil {
+				slog.Error("Failed to wait for Matrix sync event", "error", err)
+				fmt.Println("  ⚠️ Proceeding without sync confirmation...")
+			} else {
+				fmt.Println("  ✅ Matrix module fully synced and ready after configuration")
+			}
+
+			// Test GetCallingProtocols after successful configuration and sync
 			fmt.Println("  Testing GetCallingProtocols...")
 			err = testGetCallingProtocols(matrixModule.GrpcAddress)
 			if err != nil {
@@ -271,6 +282,10 @@ func TestOrchestratorService() error {
 	} else {
 		fmt.Println("❌ Matrix module not found")
 	}
+	
+	// Wait for next entity discovery cycle after sync
+	fmt.Println("  Waiting for entity discovery refresh...")
+	time.Sleep(12 * time.Second)
 
 	// Step 7: Subscribe to events for a few seconds
 	fmt.Println("Step 7: Subscribing to events for 3 seconds...")
@@ -328,6 +343,40 @@ func TestOrchestratorService() error {
 	fmt.Println("═══════════════════════════════════════════════════════════════")
 
 	return nil
+}
+
+func waitForMatrixSyncEvent(client orchestratorpb.OrchestratorServiceClient) error {
+	fmt.Println("  Subscribing to events and waiting for Matrix sync...")
+	
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	eventStream, err := client.SubscribeToEvents(ctx, &orchestratorpb.SubscribeToEventsRequest{})
+	if err != nil {
+		return fmt.Errorf("failed to subscribe to events: %w", err)
+	}
+
+	for {
+		event, err := eventStream.Recv()
+		if err != nil {
+			if ctx.Err() != nil {
+				return fmt.Errorf("timeout waiting for Matrix sync event")
+			}
+			return fmt.Errorf("error receiving event: %w", err)
+		}
+
+		fmt.Printf("  Received event: %s from %s\n", event.Severity.String(), event.SourceModuleId)
+		
+		// Check if this is a Matrix sync complete event
+		if event.SourceModuleId == "matrix" {
+			if genericEvent := event.GetGeneric(); genericEvent != nil {
+				if strings.Contains(genericEvent.Message, "sync completed") {
+					fmt.Printf("  🎉 Matrix sync complete: %s\n", genericEvent.Message)
+					return nil
+				}
+			}
+		}
+	}
 }
 
 func configureModule(grpcAddress, moduleName, configJson string) error {
@@ -519,22 +568,38 @@ func testPipelineManagement(client orchestratorpb.OrchestratorServiceClient) err
 		return fmt.Errorf("failed to list entities: %w", err)
 	}
 
-	if len(entitiesResp.MediaSources) == 0 || len(entitiesResp.MediaSinks) == 0 {
-		return fmt.Errorf("need at least 1 media source and 1 media sink for pipeline test")
+	if len(entitiesResp.MediaSources) == 0 {
+		return fmt.Errorf("need at least 1 media source for pipeline test")
+	}
+
+	if len(entitiesResp.Protocols) == 0 {
+		return fmt.Errorf("need at least 1 protocol for pipeline test")
 	}
 
 	sourceEntity := entitiesResp.MediaSources[0]
-	sinkEntity := entitiesResp.MediaSinks[0]
+	
+	// Find the matrix protocol entity
+	var matrixProtocol *entitiespb.Protocol
+	for _, protocol := range entitiesResp.Protocols {
+		if protocol.Type == "matrix" {
+			matrixProtocol = protocol
+			break
+		}
+	}
+	
+	if matrixProtocol == nil {
+		return fmt.Errorf("matrix protocol entity not found")
+	}
 
 	fmt.Printf("  Using source: %s (%s)\n", sourceEntity.Name, sourceEntity.Id)
-	fmt.Printf("  Using sink: %s (%s)\n", sinkEntity.Name, sinkEntity.Id)
+	fmt.Printf("  Using matrix protocol: %s (%s)\n", matrixProtocol.Name, matrixProtocol.Id)
 
 	// Test CalculatePath
 	fmt.Println("  Testing CalculatePath...")
 	pathResp, err := client.CalculatePath(ctx, &pipelinepb.CalculatePathRequest{
 		PathRequest: &pipelinepb.PathRequest{
 			SourceEntityId: sourceEntity.Id,
-			TargetEntityId: sinkEntity.Id,
+			TargetEntityId: matrixProtocol.Id,
 			MediaType:      entitiespb.MediaType_MEDIA_TYPE_VIDEO,
 			DesiredQuality: &entitiespb.QualityProfile{
 				Resolution: &entitiespb.Resolution{Width: 1920, Height: 1080},
@@ -558,18 +623,21 @@ func testPipelineManagement(client orchestratorpb.OrchestratorServiceClient) err
 	// Test CreatePipeline
 	fmt.Println("  Testing CreatePipeline...")
 	createResp, err := client.CreatePipeline(ctx, &pipelinepb.CreatePipelineRequest{
-		Name:        "Test Pipeline",
-		Description: "Automated test pipeline connecting dummy source to sink",
+		Name:        "Matrix Call Pipeline",
+		Description: "Automated test pipeline connecting dummy source to matrix calling protocol",
 		EntityRefs: []*pipelinepb.EntityReference{
 			{
 				EntityId:      sourceEntity.Id,
-				SessionId:     "test_session_1",
+				SessionId:     "test_session_source",
 				SessionConfig: map[string]string{"test": "true"},
 			},
 			{
-				EntityId:      sinkEntity.Id,
-				SessionId:     "test_session_2",
-				SessionConfig: map[string]string{"test": "true"},
+				EntityId:      matrixProtocol.Id,
+				SessionId:     "test_session_matrix",
+				SessionConfig: map[string]string{
+					"target_room": "!DgNiPNWblMzQOCYwEr:localhost",
+					"call_type":   "video",
+				},
 			},
 		},
 		Connections: pathResp.PathResponse.Connections,
