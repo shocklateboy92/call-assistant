@@ -32,9 +32,12 @@ import {
   StopFlowResponse,
   GetFlowStatusRequest,
   GetFlowStatusResponse,
-
 } from "call-assistant-protos/module";
-import { ModuleState, HealthStatus, MetricValue } from "call-assistant-protos/common";
+import {
+  ModuleState,
+  HealthStatus,
+  MetricValue,
+} from "call-assistant-protos/common";
 import { Empty } from "call-assistant-protos/google/protobuf/empty";
 import {
   ListEntitiesRequest,
@@ -49,7 +52,13 @@ import {
   EntityState,
 } from "call-assistant-protos/entities";
 import type { CallContext } from "nice-grpc-common";
-import { createClient as createMatrixClient, ClientEvent, CallEvent, MatrixClient, MatrixCall } from "matrix-js-sdk";
+import {
+  createClient as createMatrixClient,
+  ClientEvent,
+  CallEvent,
+  MatrixClient,
+  MatrixCall,
+} from "matrix-js-sdk";
 import { createChannel, createClient } from "nice-grpc";
 import {
   EventServiceDefinition,
@@ -69,20 +78,22 @@ class MatrixModule
   private configuration = new MatrixModuleConfiguration();
   private matrixProtocol?: MatrixProtocol;
   private isMatrixSynced: boolean = false;
-  private activeConnections: Map<string, {
-    sourceEntityId: string;
-    targetEntityId: string;
-    mediaType: MediaType;
-    quality: QualityProfile;
-    connectionConfig: { [key: string]: string };
-    createdAt: Date;
-    status: ConnectionStatus;
-    startedAt?: Date;
-    matrixCall?: MatrixCall; // Matrix call object from matrix-js-sdk
-    targetRoom?: string;
-    callType?: string;
-  }> = new Map();
-
+  private activeConnections: Map<
+    string,
+    {
+      sourceEntityId: string;
+      targetEntityId: string;
+      mediaType: MediaType;
+      quality: QualityProfile;
+      connectionConfig: { [key: string]: string };
+      createdAt: Date;
+      status: ConnectionStatus;
+      startedAt?: Date;
+      matrixCall?: MatrixCall; // Matrix call object from matrix-js-sdk
+      targetRoom?: string;
+      callType?: string;
+    }
+  > = new Map();
 
   async healthCheck(
     request: HealthCheckRequest,
@@ -119,28 +130,28 @@ class MatrixModule
   ): Promise<ShutdownResponse> {
     console.log("[Matrix Module] Shutdown called with:", request);
 
-    const response: ShutdownResponse = {
-      success: true,
-      error_message: "",
-    };
-
     // Clean up Matrix client
     if (this.matrixProtocol) {
       try {
         this.matrixProtocol.shutdown();
+        this.matrixProtocol = undefined;
         console.log("[Matrix Module] Matrix client stopped");
       } catch (error) {
         console.error("[Matrix Module] Error stopping Matrix client:", error);
+        return {
+          error_message: `Failed to stop Matrix client: ${String(error)}`,
+        };
       }
     }
 
-    // Gracefully shutdown after sending response
+    // Exit the process after sending response to make sure we
+    // don't accept any more requests in a shut down state.
     setTimeout(() => {
       console.log("[Matrix Module] Shutting down gracefully");
       process.exit(0);
     }, 1000);
 
-    return response;
+    return {};
   }
 
   async getConfigSchema(
@@ -160,7 +171,7 @@ class MatrixModule
     );
 
     const response = await this.configuration.applyConfig(request, context);
-    
+
     // If configuration was applied successfully, initialize Matrix client
     if (response.success) {
       try {
@@ -252,7 +263,10 @@ class MatrixModule
     request: GetEntityStatusRequest,
     context: CallContext
   ): Promise<GetEntityStatusResponse> {
-    console.log("[Matrix Module] GetEntityStatus called for:", request.entity_id);
+    console.log(
+      "[Matrix Module] GetEntityStatus called for:",
+      request.entity_id
+    );
 
     try {
       // Check if we have a matrix protocol and it matches the requested entity
@@ -294,7 +308,9 @@ class MatrixModule
 
     // Reset sync state when reinitializing
     this.isMatrixSynced = false;
-    console.log(`[Matrix Module] Reset isMatrixSynced to false during initialization at ${new Date().toISOString()}`);
+    console.log(
+      `[Matrix Module] Reset isMatrixSynced to false during initialization at ${new Date().toISOString()}`
+    );
 
     // Stop existing protocol if present
     if (this.matrixProtocol) {
@@ -316,11 +332,13 @@ class MatrixModule
     // Set up event handlers
     matrixClient.on(ClientEvent.Sync, (state: string) => {
       console.log(`[Matrix Module] Sync state: ${state}`);
-      
+
       if (state === "PREPARED") {
-        console.log(`[Matrix Module] Matrix client fully synced and ready! Setting isMatrixSynced=true at ${new Date().toISOString()}`);
+        console.log(
+          `[Matrix Module] Matrix client fully synced and ready! Setting isMatrixSynced=true at ${new Date().toISOString()}`
+        );
         this.isMatrixSynced = true;
-        
+
         // Send status update event to orchestrator
         this.sendSyncCompleteEvent();
       } else if (state === "SYNCING") {
@@ -328,9 +346,13 @@ class MatrixModule
         // Don't reset isMatrixSynced to false if it was already prepared
         // The client can go back to syncing temporarily but still be usable for calls
         if (!this.isMatrixSynced) {
-          console.log(`[Matrix Module] Matrix client initial sync in progress...`);
+          console.log(
+            `[Matrix Module] Matrix client initial sync in progress...`
+          );
         } else {
-          console.log(`[Matrix Module] Matrix client re-syncing (keeping ready state)`);
+          console.log(
+            `[Matrix Module] Matrix client re-syncing (keeping ready state)`
+          );
         }
       }
     });
@@ -370,7 +392,7 @@ class MatrixModule
       }
 
       const connectionId = `conn_matrix_${Date.now()}`;
-      
+
       // Create connection object matching dummy module pattern
       const defaultQuality: QualityProfile = {
         resolution: { width: 1920, height: 1080 },
@@ -381,8 +403,12 @@ class MatrixModule
       };
 
       const connectionMetrics: { [key: string]: MetricValue } = {
-        frames_received: { value: { $case: "int_value" as const, int_value: 0 } },
-        bytes_transferred: { value: { $case: "int_value" as const, int_value: 0 } },
+        frames_received: {
+          value: { $case: "int_value" as const, int_value: 0 },
+        },
+        bytes_transferred: {
+          value: { $case: "int_value" as const, int_value: 0 },
+        },
       };
 
       const connection: Connection = {
@@ -434,7 +460,7 @@ class MatrixModule
 
     try {
       const connectionId = request.connection_id;
-      
+
       if (this.activeConnections.has(connectionId)) {
         this.activeConnections.delete(connectionId);
         console.log(`[Matrix Module] Connection disconnected: ${connectionId}`);
@@ -463,7 +489,7 @@ class MatrixModule
 
     try {
       const connectionId = request.connection_id;
-      
+
       // Check if connection exists
       if (!this.activeConnections.has(connectionId)) {
         return {
@@ -483,17 +509,22 @@ class MatrixModule
       }
 
       const runtimeConfig = request.runtime_config ?? {};
-      
+
       // Extract target room from runtime config
       const targetRoom = runtimeConfig.target_room;
       const callType = runtimeConfig.call_type;
-      
-      console.log(`[Matrix Module] Starting ${callType} call to room: ${targetRoom}`);
-      
+
+      console.log(
+        `[Matrix Module] Starting ${callType} call to room: ${targetRoom}`
+      );
+
       try {
         // Initialize Matrix call
-        const matrixCall = await this.initializeMatrixCall(targetRoom, callType);
-        
+        const matrixCall = await this.initializeMatrixCall(
+          targetRoom,
+          callType
+        );
+
         // Update connection status
         connection.status = ConnectionStatus.CONNECTION_STATUS_CONNECTED;
         connection.startedAt = new Date();
@@ -501,17 +532,22 @@ class MatrixModule
         connection.targetRoom = targetRoom;
         connection.callType = callType;
 
-        console.log(`[Matrix Module] Flow started for connection: ${connectionId}`);
-        
+        console.log(
+          `[Matrix Module] Flow started for connection: ${connectionId}`
+        );
+
         return {
           success: true,
           error_message: "",
           status: ConnectionStatus.CONNECTION_STATUS_CONNECTED,
         };
       } catch (callError) {
-        console.error("[Matrix Module] Error initializing Matrix call:", callError);
+        console.error(
+          "[Matrix Module] Error initializing Matrix call:",
+          callError
+        );
         connection.status = ConnectionStatus.CONNECTION_STATUS_ERROR;
-        
+
         return {
           success: false,
           error_message: `Failed to start Matrix call: ${
@@ -540,7 +576,7 @@ class MatrixModule
 
     try {
       const connectionId = request.connection_id;
-      
+
       if (!this.activeConnections.has(connectionId)) {
         return {
           success: false,
@@ -557,7 +593,7 @@ class MatrixModule
           status: ConnectionStatus.CONNECTION_STATUS_ERROR,
         };
       }
-      
+
       // Stop Matrix call if present
       if (connection.matrixCall) {
         await this.stopMatrixCall(connection.matrixCall);
@@ -566,8 +602,10 @@ class MatrixModule
 
       // Update connection status
       connection.status = ConnectionStatus.CONNECTION_STATUS_DISCONNECTED;
-      
-      console.log(`[Matrix Module] Flow stopped for connection: ${connectionId}`);
+
+      console.log(
+        `[Matrix Module] Flow stopped for connection: ${connectionId}`
+      );
 
       return {
         success: true,
@@ -594,7 +632,7 @@ class MatrixModule
 
     try {
       const connectionId = request.connection_id;
-      
+
       if (!this.activeConnections.has(connectionId)) {
         return {
           success: false,
@@ -611,15 +649,27 @@ class MatrixModule
           connection: undefined,
         };
       }
-      
+
       const connectionMetrics: { [key: string]: MetricValue } = {
-        target_room: { value: { $case: "string_value" as const, string_value: connection.targetRoom || "" } },
-        call_type: { value: { $case: "string_value" as const, string_value: connection.callType || "" } },
-        uptime_seconds: { 
-          value: { 
-            $case: "int_value" as const, 
-            int_value: connection.startedAt ? Math.floor((Date.now() - connection.startedAt.getTime()) / 1000) : 0 
-          } 
+        target_room: {
+          value: {
+            $case: "string_value" as const,
+            string_value: connection.targetRoom || "",
+          },
+        },
+        call_type: {
+          value: {
+            $case: "string_value" as const,
+            string_value: connection.callType || "",
+          },
+        },
+        uptime_seconds: {
+          value: {
+            $case: "int_value" as const,
+            int_value: connection.startedAt
+              ? Math.floor((Date.now() - connection.startedAt.getTime()) / 1000)
+              : 0,
+          },
         },
       };
 
@@ -633,7 +683,7 @@ class MatrixModule
         status: connection.status,
         metrics: connectionMetrics,
       };
-      
+
       return {
         success: true,
         error_message: "",
@@ -652,71 +702,106 @@ class MatrixModule
   }
 
   // Matrix call helper methods
-  private async initializeMatrixCall(targetRoom: string, callType: string): Promise<MatrixCall> {
+  private async initializeMatrixCall(
+    targetRoom: string,
+    callType: string
+  ): Promise<MatrixCall> {
     if (!this.matrixProtocol) {
       throw new Error("Matrix protocol not initialized");
     }
 
-    console.log(`[Matrix Module] Initializing Matrix call to room ${targetRoom}`);
-    
+    console.log(
+      `[Matrix Module] Initializing Matrix call to room ${targetRoom}`
+    );
+
     const matrixClient = this.matrixProtocol.getMatrixClient();
-    
+
     // Check our own sync state flag (more reliable than Matrix client state)
     const syncState = matrixClient.getSyncState();
-    console.log(`[Matrix Module] Current sync state: ${syncState}, isMatrixSynced: ${this.isMatrixSynced} at ${new Date().toISOString()}`);
-    
+    console.log(
+      `[Matrix Module] Current sync state: ${syncState}, isMatrixSynced: ${
+        this.isMatrixSynced
+      } at ${new Date().toISOString()}`
+    );
+
     // Only check our own sync flag - we'll handle Matrix client state issues in the call creation retry logic
     if (!this.isMatrixSynced) {
-      throw new Error(`Matrix module not synced yet - wait for sync completion before attempting calls`);
+      throw new Error(
+        `Matrix module not synced yet - wait for sync completion before attempting calls`
+      );
     }
-    
-    console.log(`[Matrix Module] Matrix module is synced, proceeding with call creation`);
-    
-    
+
+    console.log(
+      `[Matrix Module] Matrix module is synced, proceeding with call creation`
+    );
+
     // Create or get the room
     try {
       const room = matrixClient.getRoom(targetRoom);
       if (!room) {
-        console.log(`[Matrix Module] Room ${targetRoom} not found in client state, attempting call anyway`);
+        console.log(
+          `[Matrix Module] Room ${targetRoom} not found in client state, attempting call anyway`
+        );
         // Don't throw error - room might exist but client not fully synced
       } else {
-        console.log(`[Matrix Module] Found room: ${room.name || targetRoom}, members: ${room.getJoinedMemberCount()}`);
+        console.log(
+          `[Matrix Module] Found room: ${
+            room.name || targetRoom
+          }, members: ${room.getJoinedMemberCount()}`
+        );
       }
 
       // Create the call - using matrix-js-sdk's MatrixCall
-      console.log(`[Matrix Module] Creating call object for room ${targetRoom}`);
-      
+      console.log(
+        `[Matrix Module] Creating call object for room ${targetRoom}`
+      );
+
       let call: MatrixCall | null = null;
       let attempts = 0;
       const maxCallAttempts = 5;
-      
+
       // Try to create call multiple times in case of transient sync state issues
       while (!call && attempts < maxCallAttempts) {
         try {
           call = matrixClient.createCall(targetRoom);
           if (call) {
-            console.log(`[Matrix Module] Successfully created call object on attempt ${attempts + 1}`);
+            console.log(
+              `[Matrix Module] Successfully created call object on attempt ${
+                attempts + 1
+              }`
+            );
             break;
           }
         } catch (error) {
-          console.log(`[Matrix Module] Call creation attempt ${attempts + 1} failed:`, error);
+          console.log(
+            `[Matrix Module] Call creation attempt ${attempts + 1} failed:`,
+            error
+          );
         }
-        
+
         attempts++;
         if (attempts < maxCallAttempts) {
-          console.log(`[Matrix Module] Retrying call creation in 1 second... (attempt ${attempts + 1}/${maxCallAttempts})`);
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          console.log(
+            `[Matrix Module] Retrying call creation in 1 second... (attempt ${
+              attempts + 1
+            }/${maxCallAttempts})`
+          );
+          await new Promise((resolve) => setTimeout(resolve, 1000));
         }
       }
-      
+
       if (!call) {
         // Try to provide more helpful error information
         const syncState = matrixClient.getSyncState();
         const isLoggedIn = matrixClient.isLoggedIn();
-        throw new Error(`Failed to create Matrix call after ${maxCallAttempts} attempts - client state: sync=${syncState}, logged_in=${isLoggedIn}, module_synced=${this.isMatrixSynced}`);
+        throw new Error(
+          `Failed to create Matrix call after ${maxCallAttempts} attempts - client state: sync=${syncState}, logged_in=${isLoggedIn}, module_synced=${this.isMatrixSynced}`
+        );
       }
 
-      console.log(`[Matrix Module] Successfully created call object for room ${targetRoom}`);
+      console.log(
+        `[Matrix Module] Successfully created call object for room ${targetRoom}`
+      );
 
       // Set up call event listeners using proper Matrix call events
       call.on(CallEvent.State, (state: string) => {
@@ -733,9 +818,11 @@ class MatrixModule
       } else {
         await call.placeVoiceCall();
       }
-      
-      console.log(`[Matrix Module] Matrix ${callType} call placed successfully to room ${targetRoom}`);
-      
+
+      console.log(
+        `[Matrix Module] Matrix ${callType} call placed successfully to room ${targetRoom}`
+      );
+
       return call;
     } catch (error) {
       console.error("[Matrix Module] Error initializing Matrix call:", error);
@@ -757,13 +844,15 @@ class MatrixModule
   // Event reporting methods
   private async sendSyncCompleteEvent(): Promise<void> {
     try {
-      console.log("[Matrix Module] Sending sync complete event to orchestrator");
-      
+      console.log(
+        "[Matrix Module] Sending sync complete event to orchestrator"
+      );
+
       const channel = createChannel("localhost:9090");
       const eventClient = createClient(EventServiceDefinition, channel);
-      
+
       const config = this.configuration.currentConfig;
-      
+
       const event: Event = {
         id: `matrix_sync_${Date.now()}`,
         severity: EventSeverity.EVENT_SEVERITY_INFO,
@@ -776,22 +865,28 @@ class MatrixModule
             old_state: EntityState.ENTITY_STATE_CREATED,
             new_state: EntityState.ENTITY_STATE_ACTIVE,
             reason: "Matrix client sync completed - module ready for calls",
-          }
-        }
+          },
+        },
       };
 
       const request: ReportEventRequest = { event };
       const response = await eventClient.reportEvent(request);
-      
+
       if (response.success) {
         console.log("[Matrix Module] ✅ Sync complete event sent successfully");
       } else {
-        console.error("[Matrix Module] ❌ Failed to send sync complete event:", response.error_message);
+        console.error(
+          "[Matrix Module] ❌ Failed to send sync complete event:",
+          response.error_message
+        );
       }
-      
+
       channel.close();
     } catch (error) {
-      console.error("[Matrix Module] Error sending sync complete event:", error);
+      console.error(
+        "[Matrix Module] Error sending sync complete event:",
+        error
+      );
     }
   }
 }

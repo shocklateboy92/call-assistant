@@ -68,7 +68,7 @@ message ShutdownRequest {
 }
 
 message ShutdownResponse {
-  bool success = 1;
+  // If error_message is not set, shutdown was successful
   optional string error_message = 2;
 }
 
