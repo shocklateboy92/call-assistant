@@ -2,6 +2,11 @@ server_name: "localhost"
 pid_file: /data/homeserver.pid
 web_client_location: https://app.element.io/
 public_baseurl: http://localhost:8008/
+serve_server_wellknown: true
+extra_well_known_client_content:
+  org.matrix.msc4143.rtc_foci:
+    - type: livekit
+      livekit_service_url: https://livekit-jwt.call.matrix.org
 
 listeners:
   - port: 8008
