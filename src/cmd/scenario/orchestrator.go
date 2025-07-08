@@ -199,20 +199,28 @@ func TestOrchestratorService() error {
 		}
 	}
 
-	if dummyModule != nil {
-		dummyConfig := fmt.Sprintf(`{
+	if dummyModule == nil {
+		fmt.Println("❌ Dummy module not found")
+		return fmt.Errorf("dummy module not found")
+	}
+
+	// Dummy module should actually still be starting,
+	// since we never implemented the code to send the start event
+	if dummyModule.Status.State != commonpb.ModuleState_MODULE_STATE_STARTING {
+		fmt.Printf("Dummy module is in %s state, expected STARTING\n",
+			dummyModule.Status.State.String())
+	}
+
+	dummyConfig := fmt.Sprintf(`{
 			"username": "%s",
 			"password": "%s"
 		}`, Users[0], TestPassword)
 
-		err := configureModule(dummyModule.GrpcAddress, "dummy", dummyConfig)
-		if err != nil {
-			slog.Error("Failed to configure dummy module", "error", err)
-		} else {
-			fmt.Printf("✅ Dummy module configured successfully with %s credentials\n", Users[0])
-		}
+	err = configureModule(dummyModule.GrpcAddress, "dummy", dummyConfig)
+	if err != nil {
+		slog.Error("Failed to configure dummy module", "error", err)
 	} else {
-		fmt.Println("❌ Dummy module not found")
+		fmt.Printf("✅ Dummy module configured successfully with %s credentials\n", Users[0])
 	}
 
 	// Step 6.5: Test Matrix module configuration validation
@@ -228,47 +236,57 @@ func TestOrchestratorService() error {
 		}
 	}
 
-	if matrixModule != nil {
-		// Test with bad credentials first
-		fmt.Println("  Testing with invalid credentials...")
-		badConfig := fmt.Sprintf(`{
+	if matrixModule == nil {
+		fmt.Println("❌ Matrix module not found")
+		return fmt.Errorf("matrix module not found")
+	}
+
+	// Check if it's in WAITING_FOR_CONFIGURATION state
+	if matrixModule.Status.State == commonpb.ModuleState_MODULE_STATE_WAITING_FOR_CONFIG {
+		fmt.Printf("Matrix module is in WAITING_FOR_CONFIGURATION state, proceeding with configuration...\n")
+	} else {
+		fmt.Printf("Matrix module is in %s state, expected WAITING_FOR_CONFIGURATION\n",
+			matrixModule.Status.State.String())
+		return fmt.Errorf("matrix module is not in WAITING_FOR_CONFIGURATION state")
+	}
+
+	// Test with bad credentials first
+	fmt.Println("  Testing with invalid credentials...")
+	badConfig := fmt.Sprintf(`{
 			"homeserver": "%s",
 			"accessToken": "bad_token",
 			"userId": "@%s:localhost"
 		}`, SynapseURL, Users[0])
 
-		err := configureModule(matrixModule.GrpcAddress, "matrix", badConfig)
-		if err != nil {
-			fmt.Printf("✅ Matrix module correctly rejected invalid credentials: %v\n", err)
-		} else {
-			fmt.Println("❌ Matrix module should have rejected invalid credentials")
-		}
+	err = configureModule(matrixModule.GrpcAddress, "matrix", badConfig)
+	if err != nil {
+		fmt.Printf("✅ Matrix module correctly rejected invalid credentials: %v\n", err)
+	} else {
+		fmt.Println("❌ Matrix module should have rejected invalid credentials")
+	}
 
-		// Now test with correct Alice credentials
-		fmt.Printf("  Testing with valid %s credentials...\n", Users[0])
-		aliceConfig := fmt.Sprintf(`{
+	// Now test with correct Alice credentials
+	fmt.Printf("  Testing with valid %s credentials...\n", Users[0])
+	aliceConfig := fmt.Sprintf(`{
 			"homeserver": "%s",
 			"accessToken": "%s",
 			"userId": "@%s:localhost"
 		}`, SynapseURL, GetAccessToken(Users[0]), Users[0])
 
-		err = configureModule(matrixModule.GrpcAddress, "matrix", aliceConfig)
-		if err != nil {
-			slog.Error("Failed to configure matrix module with valid credentials", "error", err)
-		} else {
-			fmt.Printf("✅ Matrix module configured successfully with %s credentials\n", Users[0])
-
-			// Test GetCallingProtocols after successful configuration
-			fmt.Println("  Testing GetCallingProtocols...")
-			err = testGetCallingProtocols(matrixModule.GrpcAddress)
-			if err != nil {
-				slog.Error("Failed to test GetCallingProtocols", "error", err)
-			} else {
-				fmt.Println("✅ GetCallingProtocols test passed")
-			}
-		}
+	err = configureModule(matrixModule.GrpcAddress, "matrix", aliceConfig)
+	if err != nil {
+		slog.Error("Failed to configure matrix module with valid credentials", "error", err)
 	} else {
-		fmt.Println("❌ Matrix module not found")
+		fmt.Printf("✅ Matrix module configured successfully with %s credentials\n", Users[0])
+
+		// Test GetCallingProtocols after successful configuration
+		fmt.Println("  Testing GetCallingProtocols...")
+		err = testGetCallingProtocols(matrixModule.GrpcAddress)
+		if err != nil {
+			slog.Error("Failed to test GetCallingProtocols", "error", err)
+		} else {
+			fmt.Println("✅ GetCallingProtocols test passed")
+		}
 	}
 
 	// Step 7: Subscribe to events for a few seconds
