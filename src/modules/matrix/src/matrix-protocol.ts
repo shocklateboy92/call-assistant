@@ -26,12 +26,12 @@ export class MatrixProtocol implements Protocol {
   public readonly status: EntityStatus;
   public readonly requires_audio: EntityCapabilities;
   public readonly requires_video: EntityCapabilities;
-  public get contact_ids(): string[] {
-    return Object.values(this.contacts).map((contact) => contact.id);
+  public get contacts(): MatrixContact[] {
+    return Object.values(this._contacts);
   }
 
   private matrixClient: MatrixClient;
-  private contacts: Record<string, MatrixContact> = {};
+  private _contacts: Record<string, MatrixContact> = {};
 
   constructor(config: MatrixModuleConfig) {
     this.id = `matrix__${config.userId.replace(
@@ -123,7 +123,7 @@ export class MatrixProtocol implements Protocol {
     const { joined_rooms } = await this.matrixClient.getJoinedRooms();
     console.log(`Discovered joined rooms: ${joined_rooms.length}`);
 
-    this.contacts = Object.fromEntries<MatrixContact>(
+    this._contacts = Object.fromEntries<MatrixContact>(
       joined_rooms
         .map(this.matrixClient.getRoom, this.matrixClient)
         .filter((room) => room !== null)

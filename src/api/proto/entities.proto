@@ -102,6 +102,8 @@ message Protocol {
   EntityStatus status = 5;
   EntityCapabilities requires_audio = 6;
   EntityCapabilities requires_video = 7;
+
+  repeated TargetContact contacts = 20; // List of potential targets for this account
 }
 
 /**
