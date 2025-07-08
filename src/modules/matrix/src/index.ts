@@ -49,25 +49,17 @@ import {
   Connection,
   MediaType,
   QualityProfile,
-  EntityState,
 } from "call-assistant-protos/entities";
 import type { CallContext } from "nice-grpc-common";
 import {
   createClient as createMatrixClient,
   ClientEvent,
   CallEvent,
-  MatrixClient,
   MatrixCall,
 } from "matrix-js-sdk";
-import { createChannel, createClient } from "nice-grpc";
-import {
-  EventServiceDefinition,
-  Event,
-  EventSeverity,
-  ReportEventRequest,
-} from "call-assistant-protos/events";
 import { MatrixProtocol } from "./matrix-protocol";
-import { MatrixModuleConfiguration, MatrixModuleConfig } from "./configuration";
+import { MatrixModuleConfiguration } from "./configuration";
+import { eventDispatch } from "./event-dispatch";
 
 class MatrixModule
   implements
@@ -337,10 +329,17 @@ class MatrixModule
         console.log(
           `[Matrix Module] Matrix client fully synced and ready! Setting isMatrixSynced=true at ${new Date().toISOString()}`
         );
+
+        // This will cause the module to be reported as ready
         this.isMatrixSynced = true;
 
-        // Send status update event to orchestrator
-        this.sendSyncCompleteEvent();
+        // So we just have to tell the orchestrator that our status changed
+        eventDispatch.sendEvent({
+          $case: "module_health_changed",
+          module_health_changed: {
+            reason: "Matrix client synced",
+          },
+        });
       } else if (state === "SYNCING") {
         console.log(`[Matrix Module] Matrix client is syncing...`);
         // Don't reset isMatrixSynced to false if it was already prepared
@@ -355,14 +354,6 @@ class MatrixModule
           );
         }
       }
-    });
-
-    matrixClient.on(ClientEvent.ClientWellKnown, (wellKnown: unknown) => {
-      console.log(
-        `[Matrix Module] Client well-known received: ${JSON.stringify(
-          wellKnown
-        )}`
-      );
     });
 
     // Start the Matrix client
@@ -842,53 +833,6 @@ class MatrixModule
   }
 
   // Event reporting methods
-  private async sendSyncCompleteEvent(): Promise<void> {
-    try {
-      console.log(
-        "[Matrix Module] Sending sync complete event to orchestrator"
-      );
-
-      const channel = createChannel("localhost:9090");
-      const eventClient = createClient(EventServiceDefinition, channel);
-
-      const config = this.configuration.currentConfig;
-
-      const event: Event = {
-        id: `matrix_sync_${Date.now()}`,
-        severity: EventSeverity.EVENT_SEVERITY_INFO,
-        source_module_id: "matrix",
-        timestamp: new Date(),
-        event_data: {
-          $case: "entity_state_changed",
-          entity_state_changed: {
-            entity_id: this.matrixProtocol?.id || "unknown",
-            old_state: EntityState.ENTITY_STATE_CREATED,
-            new_state: EntityState.ENTITY_STATE_ACTIVE,
-            reason: "Matrix client sync completed - module ready for calls",
-          },
-        },
-      };
-
-      const request: ReportEventRequest = { event };
-      const response = await eventClient.reportEvent(request);
-
-      if (response.success) {
-        console.log("[Matrix Module] ✅ Sync complete event sent successfully");
-      } else {
-        console.error(
-          "[Matrix Module] ❌ Failed to send sync complete event:",
-          response.error_message
-        );
-      }
-
-      channel.close();
-    } catch (error) {
-      console.error(
-        "[Matrix Module] Error sending sync complete event:",
-        error
-      );
-    }
-  }
 }
 
 // Main execution
