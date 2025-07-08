@@ -104,11 +104,7 @@ class MatrixModule
     context: CallContext
   ): Promise<ShutdownResponse> {
     console.log("[Matrix Module] Shutdown called with:", request);
-
-    const response: ShutdownResponse = {
-      success: true,
-      error_message: "",
-    };
+    const response: ShutdownResponse = {}
 
     // Clean up Matrix client
     if (this.matrixProtocol) {
@@ -117,6 +113,8 @@ class MatrixModule
         console.log("[Matrix Module] Matrix client stopped");
       } catch (error) {
         console.error("[Matrix Module] Error stopping Matrix client:", error);
+        response.error_message = `Failed to stop Matrix client: ${String(error)}`;
+        // Swallowing the error since we're shutting down anyway
       }
     }
 

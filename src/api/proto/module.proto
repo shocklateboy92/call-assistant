@@ -38,7 +38,6 @@ message ConfigureRequest {
 message ConfigureResponse {
   bool success = 1;
   string error_message = 2;
-  call_assistant.common.ModuleStatus status = 3;
 }
 
 // Shutdown messages
@@ -48,8 +47,8 @@ message ShutdownRequest {
 }
 
 message ShutdownResponse {
-  bool success = 1;
-  string error_message = 2;
+  // If error_message is not set, shutdown was successful
+  optional string error_message = 2;
 }
 
 

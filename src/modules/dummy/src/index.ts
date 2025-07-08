@@ -85,18 +85,13 @@ class DummyModule
   ): Promise<ShutdownResponse> {
     console.log("[Dummy Module] Shutdown called with:", request);
 
-    const response: ShutdownResponse = {
-      success: true,
-      error_message: "",
-    };
-
     // Gracefully shutdown after sending response
     setTimeout(() => {
       console.log("[Dummy Module] Shutting down gracefully");
       process.exit(0);
     }, 1000);
 
-    return response;
+    return {};
   }
 
   async getConfigSchema(
@@ -206,7 +201,6 @@ class DummyModule
       };
     }
   }
-
 
   async listEntities(
     request: ListEntitiesRequest,
