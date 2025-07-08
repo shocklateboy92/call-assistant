@@ -30,7 +30,7 @@ import type { CallContext } from "nice-grpc-common";
 import { createClient as createMatrixClient, ClientEvent } from "matrix-js-sdk";
 import { MatrixProtocol } from "./matrix-protocol";
 import { MatrixConfiguration } from "./configuration";
-
+import { eventDispatch } from "./event-dispatch";
 
 class MatrixModule
   implements
@@ -67,7 +67,7 @@ class MatrixModule
     context: CallContext
   ): Promise<ShutdownResponse> {
     console.log("[Matrix Module] Shutdown called with:", request);
-    const response: ShutdownResponse = {}
+    const response: ShutdownResponse = {};
 
     // Clean up Matrix client
     if (this.matrixProtocol) {
@@ -76,7 +76,9 @@ class MatrixModule
         console.log("[Matrix Module] Matrix client stopped");
       } catch (error) {
         console.error("[Matrix Module] Error stopping Matrix client:", error);
-        response.error_message = `Failed to stop Matrix client: ${String(error)}`;
+        response.error_message = `Failed to stop Matrix client: ${String(
+          error
+        )}`;
         // Swallowing the error since we're shutting down anyway
       }
     }
@@ -102,7 +104,7 @@ class MatrixModule
     context: CallContext
   ): Promise<ApplyConfigResponse> {
     const result = await this.configuration.applyConfig(request, context);
-    
+
     if (result.success) {
       try {
         await this.initializeMatrixProtocol();
@@ -124,7 +126,7 @@ class MatrixModule
         };
       }
     }
-    
+
     return result;
   }
 
@@ -252,6 +254,16 @@ async function main() {
   await server.listen(`0.0.0.0:${port}`);
   console.log(`[Matrix Module] Server started on port ${port}`);
   console.log("[Matrix Module] Ready to receive requests");
+
+  eventDispatch.sendEvent({
+    $case: "module_started",
+    module_started: {
+      module_version: "1.0.0",
+      process_id: process.pid.toString(),
+      grpc_port: port,
+      startup_duration_ms: performance.now(),
+    },
+  });
 
   // Keep the process alive and handle shutdown signals
   process.on("SIGINT", () => {
