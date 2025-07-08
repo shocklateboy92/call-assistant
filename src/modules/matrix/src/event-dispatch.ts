@@ -32,7 +32,10 @@ const eventClient = createClient(EventServiceDefinition, channel);
 export type EventData = NonNullable<Event["event_data"]>;
 
 export const eventDispatch = {
-  sendEvent: async (eventData: EventData): Promise<boolean> => {
+  sendEvent: async (
+    eventData: EventData,
+    reason?: string
+  ): Promise<boolean> => {
     const eventType = eventData.$case;
     console.log(`Sending event: ${eventType}`);
 
@@ -50,7 +53,12 @@ export const eventDispatch = {
       const response = await eventClient.reportEvent(request);
 
       if (response.success) {
-        console.log(`✅ ${eventType} event sent successfully`);
+        let suffix = "";
+        if (reason) {
+          suffix = ` (${reason})`;
+        }
+
+        console.log(`✅ ${eventType} event sent successfully${suffix}`);
         return true;
       } else {
         console.error(

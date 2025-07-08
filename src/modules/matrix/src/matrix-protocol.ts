@@ -84,7 +84,7 @@ export class MatrixProtocol implements Protocol {
       `Starting Matrix client for user: ${this.matrixClient.getUserId()}`
     );
     // Emit initial protocol state, so the orchestrator knows this protocol exists
-    await this.dispatchEntityUpdate();
+    await this.dispatchEntityUpdate("protocol created");
 
     const initialSyncPromise = this.addListenerAndWaitForFirstSync();
 
@@ -132,22 +132,25 @@ export class MatrixProtocol implements Protocol {
     );
 
     // Now let the orchestrator know about the contacts
-    await this.dispatchEntityUpdate();
+    await this.dispatchEntityUpdate("rooms changed");
   }
 
-  private dispatchEntityUpdate() {
-    return eventDispatch.sendEvent({
-      $case: "entities_updated",
-      entities_updated: {
-        module_id: moduleId,
-        reason: "new protocol created",
+  private dispatchEntityUpdate(reason: string) {
+    return eventDispatch.sendEvent(
+      {
+        $case: "entities_updated",
+        entities_updated: {
+          module_id: moduleId,
+          reason,
+        },
       },
-    });
+      reason
+    );
   }
 
   private updateStatus(state: EntityState, errorMessage?: string) {
     this._status = {
-      state: state,
+      state,
       health: errorMessage
         ? HealthStatus.HEALTH_STATUS_UNHEALTHY
         : HealthStatus.HEALTH_STATUS_HEALTHY,
@@ -158,7 +161,7 @@ export class MatrixProtocol implements Protocol {
       last_updated: new Date(),
     };
 
-    return this.dispatchEntityUpdate();
+    return this.dispatchEntityUpdate("status updated to " + EntityState[state]);
   }
 
   private addListenerAndWaitForFirstSync(): Promise<void> {
