@@ -84,18 +84,16 @@ class MatrixModule
     console.log("[Matrix Module] HealthCheck called");
 
     const isConfigured = this.config !== undefined;
-    const isConnected = this.matrixProtocol !== undefined;
 
     return {
       status: {
-        state:
-          isConfigured && isConnected
-            ? ModuleState.MODULE_STATE_READY
-            : isConfigured
-            ? ModuleState.MODULE_STATE_WAITING_FOR_CONFIG
-            : ModuleState.MODULE_STATE_UNSPECIFIED,
+        state: !isConfigured
+          ? ModuleState.MODULE_STATE_WAITING_FOR_CONFIG
+          : ModuleState.MODULE_STATE_READY,
         health: HealthStatus.HEALTH_STATUS_HEALTHY,
         error_message: "",
+        // TODO: This should be tracked by the orchestrator
+        //       instead of being sent by the module
         last_heartbeat: new Date(),
       },
     };
