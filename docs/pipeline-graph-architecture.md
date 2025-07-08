@@ -5,6 +5,7 @@
 **Sources**: Video/audio input (RTSP cameras, USB webcams)
 **Sinks**: Output devices (Chromecast, Miracast, displays)
 **Protocols**: Bidirectional calling (Matrix, XMPP, WebRTC)
+**Contacts**: Sub entities (must be have a parent entity of type Protocol). Targets for starting calls. RoomID for Matrix, etc.
 **Converters**: Media transformation (go2rtc, FFmpeg)
 
 ## Entity Types

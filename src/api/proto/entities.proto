@@ -104,6 +104,19 @@ message Protocol {
   EntityCapabilities requires_video = 7;
 }
 
+/**
+ * TargetContact represents a contact in a protocol (e.g., Matrix, XMPP)
+ * that can be used as a target for calls.
+ *
+ * In Matrix, this would be a room ID (direct room or group chat).
+ */
+message TargetContact {
+  string protocol_entity_id = 1;       // ID in the protocol (e.g., matrix, xmpp)
+
+  string display_name = 2;             // Human-readable name
+  string address = 3;                  // Address in the protocol (e.g., matrix room ID, xmpp JID)
+}
+
 message Converter {
   string id = 1;
   string name = 2;
@@ -121,9 +134,10 @@ message Connection {
   string target_entity_id = 3;
   MediaType media_type = 4;                // AUDIO, VIDEO
   string transport_protocol = 5;           // rtsp, webrtc, hls, etc.
-  QualityProfile quality = 6;
-  ConnectionStatus status = 7;
-  map<string, call_assistant.common.MetricValue> metrics = 8;
+  string target_address = 6;           // IP:port or URL
+  QualityProfile quality = 7;
+  ConnectionStatus status = 8;
+  map<string, call_assistant.common.MetricValue> metrics = 9;
 }
 
 message Flow {

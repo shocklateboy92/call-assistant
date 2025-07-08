@@ -8,11 +8,15 @@ import {
 } from "call-assistant-protos/entities";
 import {
   ClientEvent,
+  KnownMembership,
   MatrixClient,
+  Room,
+  RoomEvent,
   createClient as createMatrixClient,
 } from "matrix-js-sdk";
 import { MatrixModuleConfig } from "./configuration";
 import { eventDispatch, moduleId } from "./event-dispatch";
+import { MatrixContact } from "./matrix-contact";
 
 export class MatrixProtocol implements Protocol {
   public readonly id: string;
@@ -21,14 +25,19 @@ export class MatrixProtocol implements Protocol {
   public readonly status: EntityStatus;
   public readonly requires_audio: EntityCapabilities;
   public readonly requires_video: EntityCapabilities;
-  matrixClient: MatrixClient;
+  public get contact_ids(): string[] {
+    return Object.values(this.contacts).map((contact) => contact.id);
+  }
+
+  private matrixClient: MatrixClient;
+  private contacts: Record<string, MatrixContact> = {};
 
   constructor(config: MatrixModuleConfig) {
     this.id = `matrix__${config.userId.replace(
       /[^a-zA-Z0-9]/g,
       "_"
     )}_${Date.now()}`;
-    this.name = `Matrix Protocol (${config.userId})`;
+    this.name = `Matrix (${config.userId})`;
 
     this.status = {
       state: EntityState.ENTITY_STATE_ACTIVE,
@@ -85,6 +94,40 @@ export class MatrixProtocol implements Protocol {
     console.log(
       `Protocol state dispatched for user: ${this.matrixClient.getUserId()}`
     );
+
+    // Watch for room changes
+    this.matrixClient.on(
+      RoomEvent.MyMembership,
+      (room: Room, membership: string, prevMembership?: string) => {
+        console.log(`Membership changed in room ${room.roomId}: ${membership}`);
+        if (
+          membership in
+          [KnownMembership.Join, KnownMembership.Leave, KnownMembership.Ban]
+        ) {
+          this.OnRoomsChanged();
+        }
+      }
+    );
+
+    // Trigger initial room discovery
+    await this.OnRoomsChanged();
+  }
+
+  private async OnRoomsChanged() {
+    const { joined_rooms } = await this.matrixClient.getJoinedRooms();
+    console.log(`Discovered joined rooms: ${joined_rooms.length}`);
+
+    this.contacts = Object.fromEntries<MatrixContact>(
+      joined_rooms
+        .map(this.matrixClient.getRoom)
+        .filter((room) => room !== null)
+        .map((room) => {
+          return [room.roomId, new MatrixContact(room)];
+        })
+    );
+
+    // Now let the orchestrator know about the contacts
+    await this.dispatchEntityUpdate();
   }
 
   private dispatchEntityUpdate() {
