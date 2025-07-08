@@ -11,11 +11,7 @@ import (
 	"syscall"
 	"time"
 
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
-
 	commonpb "github.com/shocklateboy92/call-assistant/src/api/proto/common"
-	modulepb "github.com/shocklateboy92/call-assistant/src/api/proto/module"
 )
 
 // ModuleManager handles the lifecycle of modules
@@ -136,13 +132,8 @@ func (mm *ModuleManager) StartModule(ctx context.Context, moduleID string, isDev
 	// Start monitoring the process
 	go mm.monitorProcess(moduleID, cmd, port)
 
-	// Wait for module to be ready with connection retry and health check
-	if err := mm.waitForModuleReady(ctx, moduleID, port, 50*time.Second); err != nil {
-		// Stop the process if we can't connect
-		cmd.Process.Kill()
-		mm.registry.UpdateModuleStatus(moduleID, commonpb.ModuleState_MODULE_STATE_ERROR, err.Error())
-		return fmt.Errorf("failed to connect to module %s: %w", moduleID, err)
-	}
+	// We don't explicitly wait for the process to be ready here.
+	// When the module starts, it will send an event to the event service
 
 	slog.Info(
 		"Module started successfully",
@@ -154,84 +145,6 @@ func (mm *ModuleManager) StartModule(ctx context.Context, moduleID string, isDev
 		cmd.Process.Pid,
 	)
 	return nil
-}
-
-// waitForModuleReady waits for a module to be ready by connecting to its gRPC port
-// and performing a health check
-func (mm *ModuleManager) waitForModuleReady(
-	ctx context.Context,
-	moduleID string,
-	port int,
-	timeout time.Duration,
-) error {
-	address := fmt.Sprintf("localhost:%d", port)
-
-	// Create a context with timeout
-	ctxWithTimeout, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-
-	// Retry connection attempts
-	ticker := time.NewTicker(200 * time.Millisecond)
-	defer ticker.Stop()
-
-	slog.Info("Waiting for module to be ready", "module_id", moduleID, "address", address)
-
-	for {
-		select {
-		case <-ctxWithTimeout.Done():
-			return fmt.Errorf("timeout waiting for module to be ready")
-		case <-ticker.C:
-			// Check if process is still running
-			if cmd, exists := mm.processes[moduleID]; exists {
-				if cmd.ProcessState != nil && cmd.ProcessState.Exited() {
-					exitCode := cmd.ProcessState.ExitCode()
-					return fmt.Errorf("process exited with code %d", exitCode)
-				}
-			}
-
-			// Try to connect to the module
-			conn, err := grpc.NewClient(address,
-				grpc.WithTransportCredentials(insecure.NewCredentials()),
-			)
-			if err != nil {
-				slog.Debug("Failed to connect to module", "module_id", moduleID, "error", err)
-				continue // Retry
-			}
-
-			// Connection successful, now perform health check
-			client := modulepb.NewModuleServiceClient(conn)
-
-			healthResp, err := client.HealthCheck(ctxWithTimeout, &modulepb.HealthCheckRequest{})
-			conn.Close()
-
-			if err != nil {
-				slog.Debug("Health check failed", "module_id", moduleID, "error", err)
-				continue // Retry
-			}
-
-			// Update module status based on health check response
-			if err := mm.updateModuleFromHealthCheck(moduleID, healthResp); err != nil {
-				return fmt.Errorf("failed to update module status: %w", err)
-			}
-
-			slog.Info("Module is ready", "module_id", moduleID, "health_status", healthResp.Status.Health)
-			return nil
-		}
-	}
-}
-
-// updateModuleFromHealthCheck updates the module's status based on the health check response
-func (mm *ModuleManager) updateModuleFromHealthCheck(moduleID string, healthResp *modulepb.HealthCheckResponse) error {
-	if healthResp.Status == nil {
-		return fmt.Errorf("health check response missing status")
-	}
-
-	// Use the protobuf status directly
-	status := healthResp.Status.State
-	errorMsg := healthResp.Status.ErrorMessage
-
-	// Update the module status in the registry
-	return mm.registry.UpdateModuleStatus(moduleID, status, errorMsg)
 }
 
 // StopModule stops a running module
