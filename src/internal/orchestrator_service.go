@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
-	"sync"
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	commonpb "github.com/shocklateboy92/call-assistant/src/api/proto/common"
@@ -17,29 +17,28 @@ import (
 	orchestratorpb "github.com/shocklateboy92/call-assistant/src/api/proto/orchestrator"
 )
 
-// OrchestratorService implements the gRPC OrchestratorService and EventService
+// OrchestratorService implements the gRPC OrchestratorService
 type OrchestratorService struct {
 	orchestratorpb.UnimplementedOrchestratorServiceServer
-	eventspb.UnimplementedEventServiceServer
-	registry *ModuleRegistry
-	manager  *ModuleManager
-
-	// Event streaming
-	eventStreamsMu sync.RWMutex
-	eventStreams   map[string]chan *eventspb.Event
-
-	metricsStreamsMu sync.RWMutex
-	metricsStreams   map[string]chan *commonpb.Metrics
+	registry     *ModuleRegistry
+	manager      *ModuleManager
+	eventService *EventService
 }
 
 // NewOrchestratorService creates a new orchestrator service
 func NewOrchestratorService(registry *ModuleRegistry, manager *ModuleManager) *OrchestratorService {
-	return &OrchestratorService{
-		registry:       registry,
-		manager:        manager,
-		eventStreams:   make(map[string]chan *eventspb.Event),
-		metricsStreams: make(map[string]chan *commonpb.Metrics),
+	eventService := NewEventService()
+	
+	orchestratorService := &OrchestratorService{
+		registry:     registry,
+		manager:      manager,
+		eventService: eventService,
 	}
+	
+	// Register callback for module_started events
+	eventService.AddEventCallback(orchestratorService.handleEventCallback)
+	
+	return orchestratorService
 }
 
 // StartGRPCServer starts the gRPC server for the orchestrator service
@@ -51,7 +50,7 @@ func (s *OrchestratorService) StartGRPCServer(ctx context.Context, port int) err
 
 	grpcServer := grpc.NewServer()
 	orchestratorpb.RegisterOrchestratorServiceServer(grpcServer, s)
-	eventspb.RegisterEventServiceServer(grpcServer, s)
+	eventspb.RegisterEventServiceServer(grpcServer, s.eventService)
 
 	slog.Info("Starting orchestrator gRPC server", "port", port)
 
@@ -175,15 +174,11 @@ func (s *OrchestratorService) SubscribeToEvents(
 	eventChan := make(chan *eventspb.Event, 100)
 	streamID := fmt.Sprintf("events_%p", stream)
 
-	s.eventStreamsMu.Lock()
-	s.eventStreams[streamID] = eventChan
-	s.eventStreamsMu.Unlock()
+	s.eventService.AddEventStream(streamID, eventChan)
 
 	// Cleanup on exit
 	defer func() {
-		s.eventStreamsMu.Lock()
-		delete(s.eventStreams, streamID)
-		s.eventStreamsMu.Unlock()
+		s.eventService.RemoveEventStream(streamID)
 		close(eventChan)
 	}()
 
@@ -213,15 +208,11 @@ func (s *OrchestratorService) SubscribeToMetrics(
 	metricsChan := make(chan *commonpb.Metrics, 100)
 	streamID := fmt.Sprintf("metrics_%p", stream)
 
-	s.metricsStreamsMu.Lock()
-	s.metricsStreams[streamID] = metricsChan
-	s.metricsStreamsMu.Unlock()
+	s.eventService.AddMetricsStream(streamID, metricsChan)
 
 	// Cleanup on exit
 	defer func() {
-		s.metricsStreamsMu.Lock()
-		delete(s.metricsStreams, streamID)
-		s.metricsStreamsMu.Unlock()
+		s.eventService.RemoveMetricsStream(streamID)
 		close(metricsChan)
 	}()
 
@@ -242,101 +233,17 @@ func (s *OrchestratorService) SubscribeToMetrics(
 	}
 }
 
-// BroadcastEvent sends an event to all subscribed event streams
-func (s *OrchestratorService) BroadcastEvent(event *eventspb.Event) {
-	s.eventStreamsMu.RLock()
-	defer s.eventStreamsMu.RUnlock()
-
-	for streamID, eventChan := range s.eventStreams {
-		select {
-		case eventChan <- event:
-			// Event sent successfully
-		default:
-			// Channel is full, skip this stream
-			slog.Warn("Event stream buffer full, dropping event", "stream_id", streamID)
-		}
-	}
-}
-
-// BroadcastMetrics sends metrics to all subscribed metrics streams
-func (s *OrchestratorService) BroadcastMetrics(metrics *commonpb.Metrics) {
-	s.metricsStreamsMu.RLock()
-	defer s.metricsStreamsMu.RUnlock()
-
-	for streamID, metricsChan := range s.metricsStreams {
-		select {
-		case metricsChan <- metrics:
-			// Metrics sent successfully
-		default:
-			// Channel is full, skip this stream
-			slog.Warn("Metrics stream buffer full, dropping metrics", "stream_id", streamID)
-		}
-	}
-}
-
-// EventService implementation - methods for modules to report events
-
-// ReportEvent handles event reports from modules
-func (s *OrchestratorService) ReportEvent(
-	ctx context.Context,
-	req *eventspb.ReportEventRequest,
-) (*eventspb.ReportEventResponse, error) {
-	if req.Event == nil {
-		return &eventspb.ReportEventResponse{
-			Success:      false,
-			ErrorMessage: "Event is required",
-		}, nil
-	}
-
-	// Log the event
-	slog.Info("Received event from module",
-		"module_id", req.Event.SourceModuleId,
-		"event_id", req.Event.Id,
-		"severity", req.Event.Severity,
-	)
-
+// handleEventCallback handles all events and dispatches to specific handlers
+func (s *OrchestratorService) handleEventCallback(ctx context.Context, event *eventspb.Event) {
 	// Handle module_started event
-	if moduleStartedEvent := req.Event.GetModuleStarted(); moduleStartedEvent != nil {
-		s.handleModuleStartedEvent(ctx, req.Event.SourceModuleId, moduleStartedEvent)
+	if moduleStartedEvent := event.GetModuleStarted(); moduleStartedEvent != nil {
+		s.handleModuleStartedEvent(ctx, event.SourceModuleId, moduleStartedEvent)
 	}
-
-	// Broadcast the event to all subscribed streams
-	s.BroadcastEvent(req.Event)
-
-	return &eventspb.ReportEventResponse{
-		Success: true,
-	}, nil
-}
-
-// ReportMetrics handles metrics reports from modules
-func (s *OrchestratorService) ReportMetrics(
-	ctx context.Context,
-	req *eventspb.ReportMetricsRequest,
-) (*eventspb.ReportMetricsResponse, error) {
-	if req.Metrics == nil {
-		return &eventspb.ReportMetricsResponse{
-			Success:      false,
-			ErrorMessage: "Metrics are required",
-		}, nil
-	}
-
-	// Log the metrics
-	slog.Debug("Received metrics from module",
-		"module_id", req.Metrics.ModuleId,
-		"metric_count", len(req.Metrics.Metrics),
-	)
-
-	// Broadcast the metrics to all subscribed streams
-	s.BroadcastMetrics(req.Metrics)
-
-	return &eventspb.ReportMetricsResponse{
-		Success: true,
-	}, nil
 }
 
 // handleModuleStartedEvent handles module_started events and performs initial health check
 func (s *OrchestratorService) handleModuleStartedEvent(
-	ctx context.Context,
+	_ context.Context,
 	moduleID string,
 	event *eventspb.ModuleStartedEvent,
 ) {
@@ -360,14 +267,14 @@ func (s *OrchestratorService) handleModuleStartedEvent(
 		return
 	}
 
-	// Perform initial health check
-	go s.performHealthCheck(ctx, moduleID)
+	// Perform initial health check - will be waited on by event service before broadcast
+	go s.performHealthCheck(context.Background(), moduleID)
 }
 
 // performHealthCheck performs the first health check after module startup
 func (s *OrchestratorService) performHealthCheck(ctx context.Context, moduleID string) {
-	// Create a timeout context for the health check
-	healthCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	// Create a timeout context for the health check based on the passed context
+	healthCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	regModule, exists := s.registry.GetModule(moduleID)
 	if !exists {
@@ -382,7 +289,7 @@ func (s *OrchestratorService) performHealthCheck(ctx context.Context, moduleID s
 
 	// Connect to module and perform health check
 	address := fmt.Sprintf("localhost:%d", regModule.GRPCPort)
-	conn, err := grpc.Dial(address, grpc.WithInsecure())
+	conn, err := grpc.NewClient(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		slog.Error("Failed to connect to module for health check",
 			"module_id", moduleID,
