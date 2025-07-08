@@ -111,7 +111,11 @@ const schema: JSONSchemaType<DummyModuleConfig> = {
       description: "Whether to enable frame counting for test sinks",
     },
   },
-  required: ["test_pattern_fps", "test_pattern_resolution", "enable_frame_counting"],
+  required: [
+    "test_pattern_fps",
+    "test_pattern_resolution",
+    "enable_frame_counting",
+  ],
   additionalProperties: false,
 };
 
@@ -136,15 +140,19 @@ class DummyModule
 
   private createDefaultEntities(): void {
     // Create a default test pattern source
-    const source = this.createTestPatternSource(new Map([
-      ['fps', '30'],
-      ['resolution', '1920x1080']
-    ]));
-    
+    const source = this.createTestPatternSource(
+      new Map([
+        ["fps", "30"],
+        ["resolution", "1920x1080"],
+      ])
+    );
+
     // Create a default test sink
     const sink = this.createTestSink(new Map());
-    
-    console.log(`[Dummy Module] Created default entities: source=${source.id}, sink=${sink.id}`);
+
+    console.log(
+      `[Dummy Module] Created default entities: source=${source.id}, sink=${sink.id}`
+    );
   }
 
   async healthCheck(
@@ -171,18 +179,14 @@ class DummyModule
   ): Promise<ShutdownResponse> {
     console.log("[Dummy Module] Shutdown called with:", request);
 
-    const response: ShutdownResponse = {
-      success: true,
-      error_message: "",
-    };
-
     // Gracefully shutdown after sending response
     setTimeout(() => {
       console.log("[Dummy Module] Shutting down gracefully");
       process.exit(0);
     }, 1000);
 
-    return response;
+    // Empty response to indicates successful shutdown initiation
+    return {};
   }
 
   async getConfigSchema(
@@ -293,12 +297,13 @@ class DummyModule
     }
   }
 
-
   async getEntityStatus(
     request: GetEntityStatusRequest,
     context: CallContext
   ): Promise<GetEntityStatusResponse> {
-    console.log(`[Dummy Module] GetEntityStatus called for: ${request.entity_id}`);
+    console.log(
+      `[Dummy Module] GetEntityStatus called for: ${request.entity_id}`
+    );
 
     try {
       // Check sources
@@ -308,19 +313,25 @@ class DummyModule
           success: true,
           error_message: "",
           status: {
-            state: source.isActive ? EntityState.ENTITY_STATE_ACTIVE : EntityState.ENTITY_STATE_CREATED,
+            state: source.isActive
+              ? EntityState.ENTITY_STATE_ACTIVE
+              : EntityState.ENTITY_STATE_CREATED,
             health: HealthStatus.HEALTH_STATUS_HEALTHY,
             error_message: "",
             active_connections: Array.from(this.connections.values())
-              .filter(conn => conn.sourceEntityId === request.entity_id)
-              .map(conn => conn.id),
+              .filter((conn) => conn.sourceEntityId === request.entity_id)
+              .map((conn) => conn.id),
             metrics: {
-              frames_generated: { value: { $case: "int_value", int_value: source.frameCount } },
-              fps: { value: { $case: "double_value", double_value: source.fps } },
+              frames_generated: {
+                value: { $case: "int_value", int_value: source.frameCount },
+              },
+              fps: {
+                value: { $case: "double_value", double_value: source.fps },
+              },
             },
             created_at: new Date(),
             last_updated: new Date(),
-          }
+          },
         };
       }
 
@@ -331,19 +342,28 @@ class DummyModule
           success: true,
           error_message: "",
           status: {
-            state: sink.isActive ? EntityState.ENTITY_STATE_ACTIVE : EntityState.ENTITY_STATE_CREATED,
+            state: sink.isActive
+              ? EntityState.ENTITY_STATE_ACTIVE
+              : EntityState.ENTITY_STATE_CREATED,
             health: HealthStatus.HEALTH_STATUS_HEALTHY,
             error_message: "",
             active_connections: Array.from(this.connections.values())
-              .filter(conn => conn.targetEntityId === request.entity_id)
-              .map(conn => conn.id),
+              .filter((conn) => conn.targetEntityId === request.entity_id)
+              .map((conn) => conn.id),
             metrics: {
-              frames_received: { value: { $case: "int_value", int_value: sink.frameCount } },
-              last_frame_time: { value: { $case: "string_value", string_value: sink.lastFrameTime.toISOString() } },
+              frames_received: {
+                value: { $case: "int_value", int_value: sink.frameCount },
+              },
+              last_frame_time: {
+                value: {
+                  $case: "string_value",
+                  string_value: sink.lastFrameTime.toISOString(),
+                },
+              },
             },
             created_at: new Date(),
             last_updated: new Date(),
-          }
+          },
         };
       }
 
@@ -356,7 +376,9 @@ class DummyModule
       console.error("[Dummy Module] Error getting entity status:", error);
       return {
         success: false,
-        error_message: `Failed to get entity status: ${error instanceof Error ? error.message : String(error)}`,
+        error_message: `Failed to get entity status: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
         status: undefined,
       };
     }
@@ -374,9 +396,13 @@ class DummyModule
 
       // Add test pattern sources
       for (const [id, source] of this.testSources.entries()) {
-        const passesTypeFilter = !request.entity_type_filter || request.entity_type_filter === "media_source";
-        const passesStateFilter = !request.state_filter || request.state_filter === EntityState.ENTITY_STATE_ACTIVE;
-        
+        const passesTypeFilter =
+          !request.entity_type_filter ||
+          request.entity_type_filter === "media_source";
+        const passesStateFilter =
+          !request.state_filter ||
+          request.state_filter === EntityState.ENTITY_STATE_ACTIVE;
+
         if (passesTypeFilter && passesStateFilter) {
           mediaSources.push({
             id,
@@ -388,13 +414,19 @@ class DummyModule
               frame_count: source.frameCount.toString(),
             },
             status: {
-              state: source.isActive ? EntityState.ENTITY_STATE_ACTIVE : EntityState.ENTITY_STATE_CREATED,
+              state: source.isActive
+                ? EntityState.ENTITY_STATE_ACTIVE
+                : EntityState.ENTITY_STATE_CREATED,
               health: HealthStatus.HEALTH_STATUS_HEALTHY,
               error_message: "",
               active_connections: [],
               metrics: {
-                frames_generated: { value: { $case: "int_value", int_value: source.frameCount } },
-                fps: { value: { $case: "double_value", double_value: source.fps } },
+                frames_generated: {
+                  value: { $case: "int_value", int_value: source.frameCount },
+                },
+                fps: {
+                  value: { $case: "double_value", double_value: source.fps },
+                },
               },
               created_at: new Date(),
               last_updated: new Date(),
@@ -414,9 +446,13 @@ class DummyModule
 
       // Add test sinks
       for (const [id, sink] of this.testSinks.entries()) {
-        const passesTypeFilter = !request.entity_type_filter || request.entity_type_filter === "media_sink";
-        const passesStateFilter = !request.state_filter || request.state_filter === EntityState.ENTITY_STATE_ACTIVE;
-        
+        const passesTypeFilter =
+          !request.entity_type_filter ||
+          request.entity_type_filter === "media_sink";
+        const passesStateFilter =
+          !request.state_filter ||
+          request.state_filter === EntityState.ENTITY_STATE_ACTIVE;
+
         if (passesTypeFilter && passesStateFilter) {
           mediaSinks.push({
             id,
@@ -427,13 +463,22 @@ class DummyModule
               last_frame_time: sink.lastFrameTime.toISOString(),
             },
             status: {
-              state: sink.isActive ? EntityState.ENTITY_STATE_ACTIVE : EntityState.ENTITY_STATE_CREATED,
+              state: sink.isActive
+                ? EntityState.ENTITY_STATE_ACTIVE
+                : EntityState.ENTITY_STATE_CREATED,
               health: HealthStatus.HEALTH_STATUS_HEALTHY,
               error_message: "",
               active_connections: [],
               metrics: {
-                frames_received: { value: { $case: "int_value", int_value: sink.frameCount } },
-                last_frame_time: { value: { $case: "string_value", string_value: sink.lastFrameTime.toISOString() } },
+                frames_received: {
+                  value: { $case: "int_value", int_value: sink.frameCount },
+                },
+                last_frame_time: {
+                  value: {
+                    $case: "string_value",
+                    string_value: sink.lastFrameTime.toISOString(),
+                  },
+                },
               },
               created_at: new Date(),
               last_updated: new Date(),
@@ -463,7 +508,9 @@ class DummyModule
       console.error("[Dummy Module] Error listing entities:", error);
       return {
         success: false,
-        error_message: `Failed to list entities: ${error instanceof Error ? error.message : String(error)}`,
+        error_message: `Failed to list entities: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
         media_sources: [],
         media_sinks: [],
         protocols: [],
@@ -472,16 +519,23 @@ class DummyModule
     }
   }
 
-  private parseResolution(resolution: string): { width: number; height: number } {
-    const [width, height] = resolution.split('x').map(Number);
+  private parseResolution(resolution: string): {
+    width: number;
+    height: number;
+  } {
+    const [width, height] = resolution.split("x").map(Number);
     return { width, height };
   }
 
-  private createTestPatternSource(config: Map<string, string>): TestPatternSource {
+  private createTestPatternSource(
+    config: Map<string, string>
+  ): TestPatternSource {
     const id = `test_source_${this.nextEntityId++}`;
-    const fps = parseInt(config.get('fps') || '30');
-    const resolution = this.parseResolution(config.get('resolution') || '1920x1080');
-    
+    const fps = parseInt(config.get("fps") || "30");
+    const resolution = this.parseResolution(
+      config.get("resolution") || "1920x1080"
+    );
+
     const source: TestPatternSource = {
       id,
       fps,
@@ -496,7 +550,7 @@ class DummyModule
 
   private createTestSink(config: Map<string, string>): TestSink {
     const id = `test_sink_${this.nextEntityId++}`;
-    
+
     const sink: TestSink = {
       id,
       frameCount: 0,
@@ -510,38 +564,44 @@ class DummyModule
 
   private startTestPattern(source: TestPatternSource): void {
     if (source.isActive) return;
-    
+
     source.isActive = true;
     const intervalMs = 1000 / source.fps;
-    
+
     source.interval = setInterval(() => {
       source.frameCount++;
       if (source.frameCount % 30 === 0) {
-        console.log(`[Dummy Module] Test pattern ${source.id} generated ${source.frameCount} frames`);
+        console.log(
+          `[Dummy Module] Test pattern ${source.id} generated ${source.frameCount} frames`
+        );
       }
     }, intervalMs);
-    
-    console.log(`[Dummy Module] Started test pattern ${source.id} at ${source.fps} fps`);
+
+    console.log(
+      `[Dummy Module] Started test pattern ${source.id} at ${source.fps} fps`
+    );
   }
 
   private stopTestPattern(source: TestPatternSource): void {
     if (!source.isActive) return;
-    
+
     source.isActive = false;
     if (source.interval) {
       clearInterval(source.interval);
       source.interval = undefined;
     }
-    
+
     console.log(`[Dummy Module] Stopped test pattern ${source.id}`);
   }
 
   private simulateFrameReceived(sink: TestSink): void {
     sink.frameCount++;
     sink.lastFrameTime = new Date();
-    
+
     if (sink.frameCount % 30 === 0) {
-      console.log(`[Dummy Module] Test sink ${sink.id} received ${sink.frameCount} frames`);
+      console.log(
+        `[Dummy Module] Test sink ${sink.id} received ${sink.frameCount} frames`
+      );
     }
   }
 
@@ -550,7 +610,9 @@ class DummyModule
     request: ConnectEntitiesRequest,
     context: CallContext
   ): Promise<ConnectEntitiesResponse> {
-    console.log(`[Dummy Module] ConnectEntities called: ${request.source_entity_id} -> ${request.target_entity_id}`);
+    console.log(
+      `[Dummy Module] ConnectEntities called: ${request.source_entity_id} -> ${request.target_entity_id}`
+    );
 
     try {
       // Validate source entity exists
@@ -619,7 +681,9 @@ class DummyModule
       console.error("[Dummy Module] Error connecting entities:", error);
       return {
         success: false,
-        error_message: `Failed to connect entities: ${error instanceof Error ? error.message : String(error)}`,
+        error_message: `Failed to connect entities: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
         connection: undefined,
       };
     }
@@ -629,7 +693,9 @@ class DummyModule
     request: DisconnectEntitiesRequest,
     context: CallContext
   ): Promise<DisconnectEntitiesResponse> {
-    console.log(`[Dummy Module] DisconnectEntities called: ${request.connection_id}`);
+    console.log(
+      `[Dummy Module] DisconnectEntities called: ${request.connection_id}`
+    );
 
     try {
       const connection = this.connections.get(request.connection_id);
@@ -658,7 +724,9 @@ class DummyModule
       console.error("[Dummy Module] Error disconnecting entities:", error);
       return {
         success: false,
-        error_message: `Failed to disconnect entities: ${error instanceof Error ? error.message : String(error)}`,
+        error_message: `Failed to disconnect entities: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
       };
     }
   }
@@ -694,7 +762,7 @@ class DummyModule
       // Start the flow simulation
       connection.status = ConnectionStatus.CONNECTION_STATUS_CONNECTED;
       connection.startedAt = new Date();
-      
+
       // Start source if not active
       if (!source.isActive) {
         this.startTestPattern(source);
@@ -708,12 +776,14 @@ class DummyModule
       connection.interval = setInterval(() => {
         connection.framesSent++;
         connection.bytesTransferred += 1024; // Simulate 1KB per frame
-        
+
         // Forward frame to sink
         this.simulateFrameReceived(sink);
 
         if (connection.framesSent % 30 === 0) {
-          console.log(`[Dummy Module] Connection ${connection.id}: ${connection.framesSent} frames transferred`);
+          console.log(
+            `[Dummy Module] Connection ${connection.id}: ${connection.framesSent} frames transferred`
+          );
         }
       }, 1000 / transferRate);
 
@@ -727,7 +797,9 @@ class DummyModule
       console.error("[Dummy Module] Error starting flow:", error);
       return {
         success: false,
-        error_message: `Failed to start flow: ${error instanceof Error ? error.message : String(error)}`,
+        error_message: `Failed to start flow: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
         status: ConnectionStatus.CONNECTION_STATUS_ERROR,
       };
     }
@@ -773,7 +845,9 @@ class DummyModule
       console.error("[Dummy Module] Error stopping flow:", error);
       return {
         success: false,
-        error_message: `Failed to stop flow: ${error instanceof Error ? error.message : String(error)}`,
+        error_message: `Failed to stop flow: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
         status: ConnectionStatus.CONNECTION_STATUS_ERROR,
       };
     }
@@ -783,7 +857,9 @@ class DummyModule
     request: GetFlowStatusRequest,
     context: CallContext
   ): Promise<GetFlowStatusResponse> {
-    console.log(`[Dummy Module] GetFlowStatus called: ${request.connection_id}`);
+    console.log(
+      `[Dummy Module] GetFlowStatus called: ${request.connection_id}`
+    );
 
     try {
       const connection = this.connections.get(request.connection_id);
@@ -804,14 +880,25 @@ class DummyModule
         quality: connection.quality,
         status: connection.status,
         metrics: {
-          frames_sent: { value: { $case: "int_value", int_value: connection.framesSent } },
-          bytes_transferred: { value: { $case: "int_value", int_value: connection.bytesTransferred } },
+          frames_sent: {
+            value: { $case: "int_value", int_value: connection.framesSent },
+          },
+          bytes_transferred: {
+            value: {
+              $case: "int_value",
+              int_value: connection.bytesTransferred,
+            },
+          },
           latency_ms: { value: { $case: "int_value", int_value: 10 } }, // Simulated low latency
-          uptime_seconds: { 
-            value: { 
-              $case: "int_value", 
-              int_value: connection.startedAt ? Math.floor((Date.now() - connection.startedAt.getTime()) / 1000) : 0 
-            } 
+          uptime_seconds: {
+            value: {
+              $case: "int_value",
+              int_value: connection.startedAt
+                ? Math.floor(
+                    (Date.now() - connection.startedAt.getTime()) / 1000
+                  )
+                : 0,
+            },
           },
         },
       };
@@ -825,7 +912,9 @@ class DummyModule
       console.error("[Dummy Module] Error getting flow status:", error);
       return {
         success: false,
-        error_message: `Failed to get flow status: ${error instanceof Error ? error.message : String(error)}`,
+        error_message: `Failed to get flow status: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
         connection: undefined,
       };
     }
