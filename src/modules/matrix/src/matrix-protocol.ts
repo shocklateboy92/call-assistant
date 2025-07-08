@@ -1,7 +1,7 @@
 import { HealthStatus } from "call-assistant-protos/common";
 import { Protocol, EntityStatus, EntityCapabilities, EntityState, MediaType } from "call-assistant-protos/entities";
 import { MatrixClient } from "matrix-js-sdk";
-import { MatrixModuleConfig } from ".";
+import { MatrixModuleConfig } from "./configuration";
 
 export class MatrixProtocol implements Protocol {
   public readonly id: string;
@@ -12,7 +12,7 @@ export class MatrixProtocol implements Protocol {
   public readonly requires_audio: EntityCapabilities;
   public readonly requires_video: EntityCapabilities;
 
-  constructor(private matrixClient: MatrixClient, private moduleConfig: MatrixModuleConfig) {
+  constructor(private matrixClient: MatrixClient, moduleConfig: MatrixModuleConfig) {
     this.id = `matrix__${moduleConfig.userId.replace(/[^a-zA-Z0-9]/g, "_")}_${Date.now()}`;
     this.name = `Matrix Protocol (${moduleConfig.userId})`;
     this.config = {
