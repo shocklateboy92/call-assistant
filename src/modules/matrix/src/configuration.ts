@@ -1,4 +1,4 @@
-import { JSONSchemaType } from "ajv";
+import Ajv, { JSONSchemaType } from "ajv";
 import { createClient as createMatrixClient } from "matrix-js-sdk";
 import {
   GetConfigSchemaResponse,
@@ -16,41 +16,40 @@ export interface MatrixModuleConfig {
   deviceId?: string;
 }
 
+const schema: JSONSchemaType<MatrixModuleConfig> = {
+  $schema: "http://json-schema.org/draft-07/schema#",
+  type: "object",
+  properties: {
+    homeserver: {
+      type: "string",
+      nullable: false,
+      description: "Matrix homeserver URL (e.g., https://matrix.org)",
+    },
+    accessToken: {
+      type: "string",
+      nullable: false,
+      description: "Matrix access token for authentication",
+    },
+    userId: {
+      type: "string",
+      nullable: false,
+      description: "Matrix user ID (e.g., @user:matrix.org)",
+    },
+    deviceId: {
+      type: "string",
+      nullable: true,
+      description: "Device ID for this Matrix client (optional)",
+    },
+  },
+  required: ["homeserver", "accessToken", "userId"],
+  additionalProperties: false,
+};
+
+const validate = new Ajv().compile(schema);
+
 export class MatrixConfiguration {
   private config?: MatrixModuleConfig;
   private configVersion: string = "1";
-  private readonly schema: JSONSchemaType<MatrixModuleConfig>;
-
-  constructor() {
-    this.schema = {
-      $schema: "http://json-schema.org/draft-07/schema#",
-      type: "object",
-      properties: {
-        homeserver: {
-          type: "string",
-          nullable: false,
-          description: "Matrix homeserver URL (e.g., https://matrix.org)",
-        },
-        accessToken: {
-          type: "string",
-          nullable: false,
-          description: "Matrix access token for authentication",
-        },
-        userId: {
-          type: "string",
-          nullable: false,
-          description: "Matrix user ID (e.g., @user:matrix.org)",
-        },
-        deviceId: {
-          type: "string",
-          nullable: true,
-          description: "Device ID for this Matrix client (optional)",
-        },
-      },
-      required: ["homeserver", "accessToken", "userId"],
-      additionalProperties: false,
-    };
-  }
 
   get currentConfig(): MatrixModuleConfig | undefined {
     return this.config;
@@ -75,7 +74,7 @@ export class MatrixConfiguration {
       error_message: "",
       schema: {
         schema_version: this.configVersion,
-        json_schema: JSON.stringify(this.schema, null, 2),
+        json_schema: JSON.stringify(schema, null, 2),
         required: true,
       },
     };
@@ -103,7 +102,10 @@ export class MatrixConfiguration {
         applied_config_version: this.configVersion,
       };
     } catch (error) {
-      console.error("[Matrix Configuration] Error applying configuration:", error);
+      console.error(
+        "[Matrix Configuration] Error applying configuration:",
+        error
+      );
       return {
         success: false,
         error_message: `Failed to parse configuration: ${
@@ -139,50 +141,23 @@ export class MatrixConfiguration {
     );
 
     try {
-      const testConfig = JSON.parse(request.config_json) as MatrixModuleConfig;
+      const testConfig = JSON.parse(request.config_json);
+      if (!validate(testConfig)) {
+        const validationErrors =
+          validate.errors?.map((error) => ({
+            field_path:
+              error.instancePath || error.schemaPath.replace("#/", ""),
+            error_code: error.keyword?.toUpperCase() || "VALIDATION_ERROR",
+            error_message: error.message || "Validation failed",
+            provided_value: JSON.stringify(error.data || ""),
+            expected_constraint: error.params
+              ? JSON.stringify(error.params)
+              : "See schema",
+          })) || [];
 
-      if (!testConfig.homeserver) {
         return {
           valid: false,
-          validation_errors: [
-            {
-              field_path: "homeserver",
-              error_code: "MISSING_REQUIRED_FIELD",
-              error_message: "homeserver is required",
-              provided_value: "",
-              expected_constraint: "Non-empty string",
-            },
-          ],
-        };
-      }
-
-      if (!testConfig.accessToken) {
-        return {
-          valid: false,
-          validation_errors: [
-            {
-              field_path: "accessToken",
-              error_code: "MISSING_REQUIRED_FIELD",
-              error_message: "accessToken is required",
-              provided_value: "",
-              expected_constraint: "Non-empty string",
-            },
-          ],
-        };
-      }
-
-      if (!testConfig.userId) {
-        return {
-          valid: false,
-          validation_errors: [
-            {
-              field_path: "userId",
-              error_code: "MISSING_REQUIRED_FIELD",
-              error_message: "userId is required",
-              provided_value: "",
-              expected_constraint: "Non-empty string",
-            },
-          ],
+          validation_errors: validationErrors,
         };
       }
 
@@ -196,7 +171,7 @@ export class MatrixConfiguration {
           baseUrl: testConfig.homeserver,
           accessToken: testConfig.accessToken,
           userId: testConfig.userId,
-          deviceId: testConfig.deviceId || "call-assistant-test",
+          deviceId: testConfig.deviceId || "call-assistant",
         });
 
         const whoamiResponse = await testClient.whoami();
