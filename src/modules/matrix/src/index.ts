@@ -27,9 +27,8 @@ import {
   Protocol,
 } from "call-assistant-protos/entities";
 import type { CallContext } from "nice-grpc-common";
-import { createClient as createMatrixClient, ClientEvent } from "matrix-js-sdk";
 import { MatrixProtocol } from "./matrix-protocol";
-import { MatrixConfiguration } from "./configuration";
+import { MatrixConfiguration, MatrixModuleConfig } from "./configuration";
 import { eventDispatch } from "./event-dispatch";
 
 class MatrixModule
@@ -105,27 +104,7 @@ class MatrixModule
   ): Promise<ApplyConfigResponse> {
     const result = await this.configuration.applyConfig(request, context);
 
-    if (result.success) {
-      try {
-        await this.initializeMatrixProtocol();
-        console.log(
-          "[Matrix Module] Configuration applied and Matrix client initialized successfully"
-        );
-      } catch (error) {
-        console.error(
-          "[Matrix Module] Error initializing Matrix client:",
-          error
-        );
-        return {
-          success: false,
-          error_message: `Failed to initialize Matrix client: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
-          validation_errors: [],
-          applied_config_version: "",
-        };
-      }
-    }
+    this.initializeMatrixProtocol();
 
     return result;
   }
@@ -191,10 +170,13 @@ class MatrixModule
     }
   }
 
-  private async initializeMatrixProtocol(): Promise<void> {
+  private initializeMatrixProtocol() {
     const config = this.configuration.currentConfig;
     if (!config) {
-      throw new Error("Matrix configuration not provided");
+      console.warn(
+        "[Matrix Module] Configuration has not applied successfully, skipping Matrix client initialization"
+      );
+      return;
     }
 
     console.log(
@@ -210,32 +192,8 @@ class MatrixModule
       }
     }
 
-    // Create new Matrix client
-    const matrixClient = createMatrixClient({
-      baseUrl: config.homeserver,
-      accessToken: config.accessToken,
-      userId: config.userId,
-      deviceId: config.deviceId || "call-assistant-module",
-    });
-
-    // Set up event handlers
-    matrixClient.on(ClientEvent.Sync, (state: unknown) => {
-      console.log(`[Matrix Module] Sync state: ${JSON.stringify(state)}`);
-    });
-
-    matrixClient.on(ClientEvent.ClientWellKnown, (wellKnown: unknown) => {
-      console.log(
-        `[Matrix Module] Client well-known received: ${JSON.stringify(
-          wellKnown
-        )}`
-      );
-    });
-
-    // Start the Matrix client
-    await matrixClient.startClient();
-
     // Create the protocol wrapper
-    this.matrixProtocol = new MatrixProtocol(matrixClient, config);
+    this.matrixProtocol = new MatrixProtocol(config);
 
     console.log("[Matrix Module] Matrix client initialized successfully");
   }

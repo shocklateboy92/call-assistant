@@ -27,7 +27,10 @@ message Event {
     ModuleErrorEvent module_error = 12;
     ModuleConfiguredEvent module_configured = 13;
     ModuleHealthChangedEvent module_health_changed = 14;
-    GenericEvent generic = 15;
+    
+    // Single event indicating the orchestrator should
+    // query the module for all its entities now.
+    EntitiesUpdatedEvent entities_updated = 20;
   }
 }
 
@@ -66,11 +69,13 @@ message ModuleHealthChangedEvent {
   string reason = 3;
 }
 
-// Generic event for cases not covered by specific types
-message GenericEvent {
-  string message = 1;
-  map<string, string> details = 2;
+message EntitiesUpdatedEvent {
+  // This event is sent when the orchestrator should refresh
+  // the entities from the module.
+  string module_id = 1;
+  optional string reason = 2; // e.g. "initial load", "configuration change"
 }
+
 
 // EventService is provided by the orchestrator for modules to report events
 service EventService {

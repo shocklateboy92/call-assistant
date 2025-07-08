@@ -1,3 +1,11 @@
+/**
+ * This module provides a simple event dispatch mechanism for the Matrix module.
+ * It sends events to the orchestrator's event service using gRPC.
+ *
+ * The events are sent as `ReportEventRequest` messages, which contain an `Event`
+ * object with details about the event being reported.
+ */
+
 import {
   EventServiceDefinition,
   ReportEventRequest,
@@ -10,6 +18,11 @@ if (!process.env.EVENT_SERVICE_ADDRESS) {
   throw new Error("EVENT_SERVICE_ADDRESS environment variable is not set");
 }
 
+if (!process.env.MODULE_ID) {
+  throw new Error("MODULE_ID environment variable is not set");
+}
+export const moduleId = process.env.MODULE_ID;
+
 // This channel is connected once on module initialization.
 // We're not doing reconnection logic here, because the orchestrator
 // is expected to outlive its modules.
@@ -19,7 +32,7 @@ const eventClient = createClient(EventServiceDefinition, channel);
 export type EventData = NonNullable<Event["event_data"]>;
 
 export const eventDispatch = {
-  sendEvent: async (eventData: EventData): Promise<void> => {
+  sendEvent: async (eventData: EventData): Promise<boolean> => {
     const eventType = eventData.$case;
     console.log(`[Matrix Module] Sending event: ${eventType}`);
 
@@ -38,6 +51,7 @@ export const eventDispatch = {
 
       if (response.success) {
         console.log(`[Matrix Module] ✅ ${eventType} event sent successfully`);
+        return true;
       } else {
         console.error(
           `[Matrix Module] ❌ Failed to send ${eventType} event:`,
@@ -50,5 +64,7 @@ export const eventDispatch = {
       console.error(`[Matrix Module] Error sending ${eventType} event:`, error);
       // Swallow exceptions, because sending events is not critical
     }
+
+    return false;
   },
 };

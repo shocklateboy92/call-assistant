@@ -16,9 +16,9 @@ import (
 
 // ModuleManager handles the lifecycle of modules
 type ModuleManager struct {
-	registry          *ModuleRegistry
-	processes         map[string]*exec.Cmd
-	orchestratorPort  int
+	registry         *ModuleRegistry
+	processes        map[string]*exec.Cmd
+	orchestratorPort int
 }
 
 // NewModuleManager creates a new module manager
@@ -111,6 +111,7 @@ func (mm *ModuleManager) StartModule(ctx context.Context, moduleID string, isDev
 	cmd.Env = os.Environ()
 	cmd.Env = append(cmd.Env, fmt.Sprintf("GRPC_PORT=%d", port))
 	cmd.Env = append(cmd.Env, fmt.Sprintf("EVENT_SERVICE_ADDRESS=localhost:%d", mm.orchestratorPort))
+	cmd.Env = append(cmd.Env, fmt.Sprintf("MODULE_ID=%s", moduleID))
 
 	// Redirect output for logging
 	cmd.Stdout = &moduleLogger{moduleID: moduleID, prefix: "OUT"}
