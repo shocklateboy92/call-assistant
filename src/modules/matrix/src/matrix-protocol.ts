@@ -10,6 +10,7 @@ import {
   ClientEvent,
   KnownMembership,
   MatrixClient,
+  MemoryStore,
   Room,
   RoomEvent,
   createClient as createMatrixClient,
@@ -67,6 +68,9 @@ export class MatrixProtocol implements Protocol {
       accessToken: config.accessToken,
       userId: config.userId,
       deviceId: config.deviceId || "call-assistant-module",
+      // Otherwise it doesn't store anything at all,
+      // making most sdk client methods useless.
+      store: new MemoryStore(),
     });
 
     // Set up event handlers
@@ -99,7 +103,9 @@ export class MatrixProtocol implements Protocol {
     this.matrixClient.on(
       RoomEvent.MyMembership,
       (room: Room, membership: string, prevMembership?: string) => {
-        console.log(`Membership changed in room ${room.roomId}: ${membership}`);
+        console.log(
+          `Membership changed in room ${room.roomId}: '${prevMembership}' --> '${membership}'`
+        );
         if (
           membership in
           [KnownMembership.Join, KnownMembership.Leave, KnownMembership.Ban]
@@ -119,7 +125,7 @@ export class MatrixProtocol implements Protocol {
 
     this.contacts = Object.fromEntries<MatrixContact>(
       joined_rooms
-        .map(this.matrixClient.getRoom)
+        .map(this.matrixClient.getRoom, this.matrixClient)
         .filter((room) => room !== null)
         .map((room) => {
           return [room.roomId, new MatrixContact(room)];
