@@ -147,53 +147,6 @@ message FlowStatus {
   int32 latency_ms = 5;
 }
 
-// EntityService requests and responses
-message CreateEntityRequest {
-  string entity_type = 1;                   // "media_source", "media_sink", "protocol", "converter"
-  map<string, string> configuration = 2;   // Initial configuration
-}
-
-message CreateEntityResponse {
-  bool success = 1;
-  string error_message = 2;
-  oneof entity {
-    MediaSource media_source = 3;
-    MediaSink media_sink = 4;
-    Protocol protocol = 5;
-    Converter converter = 6;
-  }
-}
-
-message ConfigureEntityRequest {
-  string entity_id = 1;
-  map<string, string> configuration = 2;
-}
-
-message ConfigureEntityResponse {
-  bool success = 1;
-  string error_message = 2;
-  EntityStatus status = 3;
-}
-
-message GetEntityStatusRequest {
-  string entity_id = 1;
-}
-
-message GetEntityStatusResponse {
-  bool success = 1;
-  string error_message = 2;
-  EntityStatus status = 3;
-}
-
-message DestroyEntityRequest {
-  string entity_id = 1;
-}
-
-message DestroyEntityResponse {
-  bool success = 1;
-  string error_message = 2;
-}
-
 message ListEntitiesRequest {
   string entity_type_filter = 1;           // Optional filter by entity type
   EntityState state_filter = 2;            // Optional filter by state
