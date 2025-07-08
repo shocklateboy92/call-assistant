@@ -135,7 +135,8 @@ func runOrchestrator(ctx context.Context, modulesDir string, devMode bool, verbo
 	fmt.Println("\n🚀 Phase 4: Module Startup")
 	fmt.Println("───────────────────────────────────────────────────────────────")
 
-	manager := internal.NewModuleManager(registry)
+	const orchestratorPort = 9090
+	manager := internal.NewModuleManager(registry, orchestratorPort)
 
 	// Start all modules
 	if err := manager.StartAllModules(ctx, devMode); err != nil {
@@ -152,7 +153,7 @@ func runOrchestrator(ctx context.Context, modulesDir string, devMode bool, verbo
 
 	// Start gRPC server in goroutine
 	go func() {
-		if err := orchestratorService.StartGRPCServer(ctx, 9090); err != nil {
+		if err := orchestratorService.StartGRPCServer(ctx, orchestratorPort); err != nil {
 			slog.Error("gRPC server error", "error", err)
 		}
 	}()

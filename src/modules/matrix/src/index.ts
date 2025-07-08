@@ -261,7 +261,7 @@ async function main() {
       module_version: "1.0.0",
       process_id: process.pid.toString(),
       grpc_port: port,
-      startup_duration_ms: performance.now(),
+      startup_duration_ms: Math.floor(performance.now()),
     },
   });
 

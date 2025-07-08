@@ -6,12 +6,14 @@ import (
 	"log/slog"
 	"net"
 	"sync"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	commonpb "github.com/shocklateboy92/call-assistant/src/api/proto/common"
 	eventspb "github.com/shocklateboy92/call-assistant/src/api/proto/events"
+	modulepb "github.com/shocklateboy92/call-assistant/src/api/proto/module"
 	orchestratorpb "github.com/shocklateboy92/call-assistant/src/api/proto/orchestrator"
 )
 
@@ -293,6 +295,11 @@ func (s *OrchestratorService) ReportEvent(
 		"severity", req.Event.Severity,
 	)
 
+	// Handle module_started event
+	if moduleStartedEvent := req.Event.GetModuleStarted(); moduleStartedEvent != nil {
+		s.handleModuleStartedEvent(ctx, req.Event.SourceModuleId, moduleStartedEvent)
+	}
+
 	// Broadcast the event to all subscribed streams
 	s.BroadcastEvent(req.Event)
 
@@ -325,4 +332,92 @@ func (s *OrchestratorService) ReportMetrics(
 	return &eventspb.ReportMetricsResponse{
 		Success: true,
 	}, nil
+}
+
+// handleModuleStartedEvent handles module_started events and performs initial health check
+func (s *OrchestratorService) handleModuleStartedEvent(
+	ctx context.Context,
+	moduleID string,
+	event *eventspb.ModuleStartedEvent,
+) {
+	slog.Info("Module started event received",
+		"module_id", moduleID,
+		"version", event.ModuleVersion,
+		"startup_duration_ms", event.StartupDurationMs,
+		"grpc_port", event.GrpcPort,
+	)
+
+	// Update module registry with the confirmed gRPC port
+	// Use the existing UpdateModuleProcess method to update the gRPC port
+	regModule, exists := s.registry.GetModule(moduleID)
+	if !exists {
+		slog.Error("Module not found for gRPC port update", "module_id", moduleID)
+		return
+	}
+
+	if err := s.registry.UpdateModuleProcess(moduleID, regModule.ProcessID, int(event.GrpcPort)); err != nil {
+		slog.Error("Failed to update module gRPC port", "module_id", moduleID, "error", err)
+		return
+	}
+
+	// Perform initial health check
+	go s.performHealthCheck(ctx, moduleID)
+}
+
+// performHealthCheck performs the first health check after module startup
+func (s *OrchestratorService) performHealthCheck(ctx context.Context, moduleID string) {
+	// Create a timeout context for the health check
+	healthCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	regModule, exists := s.registry.GetModule(moduleID)
+	if !exists {
+		slog.Error("Module not found for health check", "module_id", moduleID)
+		return
+	}
+
+	if regModule.GRPCPort == 0 {
+		slog.Error("Module has no gRPC port for health check", "module_id", moduleID)
+		return
+	}
+
+	// Connect to module and perform health check
+	address := fmt.Sprintf("localhost:%d", regModule.GRPCPort)
+	conn, err := grpc.Dial(address, grpc.WithInsecure())
+	if err != nil {
+		slog.Error("Failed to connect to module for health check",
+			"module_id", moduleID,
+			"address", address,
+			"error", err,
+		)
+		s.registry.UpdateModuleStatus(moduleID, commonpb.ModuleState_MODULE_STATE_ERROR, err.Error())
+		return
+	}
+	defer conn.Close()
+
+	// Import module service client
+	moduleClient := modulepb.NewModuleServiceClient(conn)
+
+	// Perform health check
+	healthReq := &modulepb.HealthCheckRequest{}
+	healthResp, err := moduleClient.HealthCheck(healthCtx, healthReq)
+	if err != nil {
+		slog.Error("Health check failed",
+			"module_id", moduleID,
+			"error", err,
+		)
+		s.registry.UpdateModuleStatus(moduleID, commonpb.ModuleState_MODULE_STATE_ERROR, err.Error())
+		return
+	}
+
+	// Update module status based on health check
+	if healthResp.Status != nil {
+		slog.Info("Health check successful",
+			"module_id", moduleID,
+			"state", healthResp.Status.State,
+			"health", healthResp.Status.Health,
+		)
+		s.registry.UpdateModuleStatus(moduleID, healthResp.Status.State, "")
+	} else {
+		slog.Warn("Health check returned no status", "module_id", moduleID)
+	}
 }
