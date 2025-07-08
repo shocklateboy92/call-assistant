@@ -83,9 +83,13 @@ func TestOrchestratorService() error {
 		fmt.Println("Orchestrator terminated.")
 	}()
 
-	// Step 2: Wait for orchestrator to start
-	fmt.Println("Step 2: Waiting for orchestrator to start...")
-	time.Sleep(5 * time.Second)
+	// Step 2: Wait for orchestrator to start and modules to be ready
+	fmt.Println("Step 2: Waiting for orchestrator to start and modules to report started events...")
+	err := waitForModulesToStart()
+	if err != nil {
+		slog.Error("Failed to wait for modules to start", "error", err)
+		return err
+	}
 
 	// Step 3: Connect to orchestrator gRPC service
 	fmt.Println("Step 3: Connecting to orchestrator service...")
@@ -451,4 +455,82 @@ func testGetCallingProtocols(grpcAddress string) error {
 	}
 
 	return nil
+}
+
+// waitForModulesToStart waits for both expected modules to report module_started events
+func waitForModulesToStart() error {
+	// Give orchestrator a moment to start up
+	fmt.Println("  Waiting for orchestrator to become available...")
+	time.Sleep(2 * time.Second)
+
+	// Try to connect to orchestrator with retries
+	var conn *grpc.ClientConn
+	var err error
+	for attempts := range 10 {
+		conn, err = grpc.NewClient(
+			"localhost:9090",
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+		)
+		if err == nil {
+			break
+		}
+		fmt.Printf("  Connection attempt %d failed, retrying...\n", attempts+1)
+		time.Sleep(1 * time.Second)
+	}
+	if err != nil {
+		return fmt.Errorf("failed to connect to orchestrator for events after retries: %w", err)
+	}
+	defer conn.Close()
+
+	client := orchestratorpb.NewOrchestratorServiceClient(conn)
+
+	// Create context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Subscribe to events
+	stream, err := client.SubscribeToEvents(ctx, &orchestratorpb.SubscribeToEventsRequest{})
+	if err != nil {
+		return fmt.Errorf("failed to subscribe to events: %w", err)
+	}
+
+	// Track which modules we've seen start
+	modulesStarted := make(map[string]bool)
+	// Note: Only waiting for matrix module since dummy module doesn't send module_started events yet
+	expectedModules := []string{"matrix"}
+
+	fmt.Println("  Waiting for module_started events from modules: matrix")
+
+	for {
+		event, err := stream.Recv()
+		if err != nil {
+			return fmt.Errorf("failed to receive event: %w", err)
+		}
+
+		// Check if this is a module_started event
+		if moduleStartedEvent := event.GetModuleStarted(); moduleStartedEvent != nil {
+			moduleID := event.SourceModuleId
+			fmt.Printf("  ✅ Received module_started event from: %s\n", moduleID)
+
+			// Mark this module as started
+			modulesStarted[moduleID] = true
+
+			// Check if all expected modules have started
+			allStarted := true
+			for _, expectedModule := range expectedModules {
+				if !modulesStarted[expectedModule] {
+					allStarted = false
+					break
+				}
+			}
+
+			if allStarted {
+				fmt.Println("  ✅ All expected modules have started!")
+				fmt.Println("  Waiting for health checks to complete...")
+				// Give a moment for health checks to complete and update module status
+				time.Sleep(1 * time.Second)
+				return nil
+			}
+		}
+	}
 }
