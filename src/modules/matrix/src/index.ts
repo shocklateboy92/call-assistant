@@ -43,7 +43,7 @@ class MatrixModule
     request: HealthCheckRequest,
     context: CallContext
   ): Promise<HealthCheckResponse> {
-    console.log("[Matrix Module] HealthCheck called");
+    console.log("HealthCheck called");
 
     const isConfigured = this.configuration.isConfigured();
 
@@ -65,16 +65,16 @@ class MatrixModule
     request: ShutdownRequest,
     context: CallContext
   ): Promise<ShutdownResponse> {
-    console.log("[Matrix Module] Shutdown called with:", request);
+    console.log("Shutdown called with:", request);
     const response: ShutdownResponse = {};
 
     // Clean up Matrix client
     for (const protocol of Object.values(this.protocols)) {
       try {
         protocol.shutdown();
-        console.log("[Matrix Module] Matrix client stopped");
+        console.log("Matrix client stopped");
       } catch (error) {
-        console.error("[Matrix Module] Error stopping Matrix client:", error);
+        console.error("Error stopping Matrix client:", error);
         response.error_message += `Error stopping Matrix client: ${String(
           error
         )}`;
@@ -84,7 +84,7 @@ class MatrixModule
 
     // Gracefully shutdown after sending response
     setTimeout(() => {
-      console.log("[Matrix Module] Shutting down gracefully");
+      console.log("Shutting down gracefully");
       process.exit(0);
     }, 1000);
 
@@ -127,7 +127,7 @@ class MatrixModule
     request: ListEntitiesRequest,
     context: CallContext
   ): Promise<ListEntitiesResponse> {
-    console.log("[Matrix Module] ListEntities called");
+    console.log("ListEntities called");
 
     return {
       success: true,
@@ -147,27 +147,27 @@ class MatrixModule
     const config = this.configuration.currentConfig;
     if (!config) {
       console.warn(
-        "[Matrix Module] Configuration has not applied successfully, skipping Matrix client initialization"
+        "Configuration has not applied successfully, skipping Matrix client initialization"
       );
       return;
     }
 
     console.log(
-      `[Matrix Module] Initializing Matrix client for ${config.userId}`
+      `Initializing Matrix client for ${config.userId}`
     );
 
     // Create the protocol wrapper
     const protocol = new MatrixProtocol(config);
     this.protocols[protocol.id] = protocol;
 
-    console.log("[Matrix Module] Matrix client initialized successfully");
+    console.log("Matrix client initialized successfully");
   }
 }
 
 // Main execution
 async function main() {
   const port = parseInt(process.env.GRPC_PORT || "50051");
-  console.log(`[Matrix Module] Starting on port ${port}`);
+  console.log(`Starting on port ${port}`);
 
   const server = createServer();
   const matrixModule = new MatrixModule();
@@ -175,8 +175,8 @@ async function main() {
   server.add(ConfigurableModuleServiceDefinition, matrixModule);
 
   await server.listen(`0.0.0.0:${port}`);
-  console.log(`[Matrix Module] Server started on port ${port}`);
-  console.log("[Matrix Module] Ready to receive requests");
+  console.log(`Server started on port ${port}`);
+  console.log("Ready to receive requests");
 
   eventDispatch.sendEvent({
     $case: "module_started",
@@ -190,13 +190,13 @@ async function main() {
 
   // Keep the process alive and handle shutdown signals
   process.on("SIGINT", () => {
-    console.log("[Matrix Module] Received SIGINT, shutting down gracefully");
+    console.log("Received SIGINT, shutting down gracefully");
     server.shutdown();
     process.exit(0);
   });
 
   process.on("SIGTERM", () => {
-    console.log("[Matrix Module] Received SIGTERM, shutting down gracefully");
+    console.log("Received SIGTERM, shutting down gracefully");
     server.shutdown();
     process.exit(0);
   });
@@ -204,7 +204,7 @@ async function main() {
 
 if (require.main === module) {
   main().catch((error) => {
-    console.error("[Matrix Module] Failed to start:", error);
+    console.error("Failed to start:", error);
     process.exit(1);
   });
 }

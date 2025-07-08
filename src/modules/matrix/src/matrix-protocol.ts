@@ -62,7 +62,7 @@ export class MatrixProtocol implements Protocol {
 
     // Set up event handlers
     this.matrixClient.on(ClientEvent.Sync, (state: string) => {
-      console.log(`[Matrix Module] Sync state: ${state}`);
+      console.log(`Sync state: ${state}`);
     });
 
     this.onStart();
@@ -70,20 +70,20 @@ export class MatrixProtocol implements Protocol {
 
   private async onStart(): Promise<void> {
     console.log(
-      `[Matrix Module] Starting Matrix client for user: ${this.matrixClient.getUserId()}`
+      `Starting Matrix client for user: ${this.matrixClient.getUserId()}`
     );
     await this.dispatchEntityUpdate();
 
     // Initialize the Matrix client
     await this.matrixClient.startClient();
     console.log(
-      `[Matrix Module] Matrix client started for user: ${this.matrixClient.getUserId()}`
+      `Matrix client started for user: ${this.matrixClient.getUserId()}`
     );
 
     // Emit initial protocol state
     await this.dispatchEntityUpdate();
     console.log(
-      `[Matrix Module] Protocol state dispatched for user: ${this.matrixClient.getUserId()}`
+      `Protocol state dispatched for user: ${this.matrixClient.getUserId()}`
     );
   }
 

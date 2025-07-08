@@ -67,7 +67,7 @@ export class MatrixConfiguration {
     request: Empty,
     context: CallContext
   ): Promise<GetConfigSchemaResponse> {
-    console.log("[Matrix Configuration] GetConfigSchema called");
+    console.log("GetConfigSchema called");
 
     return {
       success: true,
@@ -85,7 +85,7 @@ export class MatrixConfiguration {
     context: CallContext
   ): Promise<ApplyConfigResponse> {
     console.log(
-      "[Matrix Configuration] ApplyConfig called with:",
+      "ApplyConfig called with:",
       request.config_json
     );
 
@@ -103,7 +103,7 @@ export class MatrixConfiguration {
       };
     } catch (error) {
       console.error(
-        "[Matrix Configuration] Error applying configuration:",
+        "Error applying configuration:",
         error
       );
       return {
@@ -121,7 +121,7 @@ export class MatrixConfiguration {
     request: Empty,
     context: CallContext
   ): Promise<GetCurrentConfigResponse> {
-    console.log("[Matrix Configuration] GetCurrentConfig called");
+    console.log("GetCurrentConfig called");
 
     return {
       success: true,
@@ -136,7 +136,7 @@ export class MatrixConfiguration {
     context: CallContext
   ): Promise<ValidateConfigResponse> {
     console.log(
-      "[Matrix Configuration] ValidateConfig called with:",
+      "ValidateConfig called with:",
       request.config_json
     );
 
@@ -162,7 +162,7 @@ export class MatrixConfiguration {
       }
 
       console.log(
-        "[Matrix Configuration] Testing connection to homeserver:",
+        "Testing connection to homeserver:",
         testConfig.homeserver
       );
 
@@ -176,7 +176,7 @@ export class MatrixConfiguration {
 
         const whoamiResponse = await testClient.whoami();
         console.log(
-          "[Matrix Configuration] Homeserver connection test successful:",
+          "Homeserver connection test successful:",
           whoamiResponse
         );
 
@@ -201,7 +201,7 @@ export class MatrixConfiguration {
         };
       } catch (error) {
         console.error(
-          "[Matrix Configuration] Homeserver connection test failed:",
+          "Homeserver connection test failed:",
           error
         );
         return {

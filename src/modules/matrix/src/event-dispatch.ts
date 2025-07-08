@@ -34,7 +34,7 @@ export type EventData = NonNullable<Event["event_data"]>;
 export const eventDispatch = {
   sendEvent: async (eventData: EventData): Promise<boolean> => {
     const eventType = eventData.$case;
-    console.log(`[Matrix Module] Sending event: ${eventType}`);
+    console.log(`Sending event: ${eventType}`);
 
     const request: ReportEventRequest = {
       event: {
@@ -50,18 +50,18 @@ export const eventDispatch = {
       const response = await eventClient.reportEvent(request);
 
       if (response.success) {
-        console.log(`[Matrix Module] ✅ ${eventType} event sent successfully`);
+        console.log(`✅ ${eventType} event sent successfully`);
         return true;
       } else {
         console.error(
-          `[Matrix Module] ❌ Failed to send ${eventType} event:`,
+          `❌ Failed to send ${eventType} event:`,
           response.error_message
         );
       }
 
       channel.close();
     } catch (error) {
-      console.error(`[Matrix Module] Error sending ${eventType} event:`, error);
+      console.error(`Error sending ${eventType} event:`, error);
       // Swallow exceptions, because sending events is not critical
     }
 
