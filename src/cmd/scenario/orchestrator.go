@@ -283,13 +283,22 @@ func TestOrchestratorService() error {
 	} else {
 		fmt.Printf("✅ Matrix module configured successfully with %s credentials\n", Users[0])
 
-		// Test GetCallingProtocols after successful configuration
-		fmt.Println("  Testing GetCallingProtocols...")
-		err = testGetCallingProtocols(matrixModule.GrpcAddress)
+		// Wait for entities to be created asynchronously
+		fmt.Println("  Waiting for entities to be created...")
+		err = waitForEntitiesUpdated(client, "matrix")
 		if err != nil {
-			slog.Error("Failed to test GetCallingProtocols", "error", err)
+			slog.Error("Failed to wait for entities to be created", "error", err)
 		} else {
-			fmt.Println("✅ GetCallingProtocols test passed")
+			fmt.Println("✅ Entities created successfully")
+
+			// Test GetCallingProtocols after entities are created
+			fmt.Println("  Testing GetCallingProtocols...")
+			err = testGetCallingProtocols(matrixModule.GrpcAddress)
+			if err != nil {
+				slog.Error("Failed to test GetCallingProtocols", "error", err)
+			} else {
+				fmt.Println("✅ GetCallingProtocols test passed")
+			}
 		}
 	}
 
@@ -525,6 +534,36 @@ func waitForModulesToStart() error {
 				time.Sleep(1 * time.Second)
 				return nil
 			}
+		}
+	}
+}
+
+// waitForEntitiesUpdated waits for an EntitiesUpdatedEvent from the specified module
+func waitForEntitiesUpdated(client orchestratorpb.OrchestratorServiceClient, moduleId string) error {
+	// Create context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Subscribe to events
+	stream, err := client.SubscribeToEvents(ctx, &orchestratorpb.SubscribeToEventsRequest{
+		FilterModuleIds: []string{moduleId},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to subscribe to events: %w", err)
+	}
+
+	fmt.Printf("  Waiting for entities_updated event from module: %s\n", moduleId)
+
+	for {
+		event, err := stream.Recv()
+		if err != nil {
+			return fmt.Errorf("failed to receive event: %w", err)
+		}
+
+		// Check if this is an entities_updated event
+		if entitiesUpdatedEvent := event.GetEntitiesUpdated(); entitiesUpdatedEvent != nil {
+			fmt.Printf("  ✅ Received entities_updated event from: %s\n", event.SourceModuleId)
+			return nil
 		}
 	}
 }
