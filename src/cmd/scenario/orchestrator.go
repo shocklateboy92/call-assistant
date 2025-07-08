@@ -445,12 +445,6 @@ func testGetCallingProtocols(grpcAddress string) error {
 		fmt.Printf("         State: %s\n", protocol.Status.State.String())
 		fmt.Printf("         Audio capabilities: %v\n", protocol.RequiresAudio.SupportedProtocols)
 		fmt.Printf("         Video capabilities: %v\n", protocol.RequiresVideo.SupportedProtocols)
-		if len(protocol.Config) > 0 {
-			fmt.Printf("         Config:\n")
-			for key, value := range protocol.Config {
-				fmt.Printf("           %s: %s\n", key, value)
-			}
-		}
 		fmt.Println()
 	}
 

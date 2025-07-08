@@ -83,7 +83,6 @@ message MediaSource {
   string id = 1;
   string name = 2;
   string type = 3;                          // rtsp, usb, hls, file, etc.
-  map<string, string> config = 4;          // Plugin-specific configuration
   EntityStatus status = 5;
   EntityCapabilities provides = 6;
 }
@@ -92,7 +91,6 @@ message MediaSink {
   string id = 1;
   string name = 2;
   string type = 3;                          // chromecast, miracast, airplay, display, etc.
-  map<string, string> config = 4;          // Plugin-specific configuration
   EntityStatus status = 5;
   EntityCapabilities requires = 6;
 }
@@ -101,7 +99,6 @@ message Protocol {
   string id = 1;
   string name = 2;
   string type = 3;                          // matrix, xmpp, webrtc, sip, etc.
-  map<string, string> config = 4;          // Plugin-specific configuration
   EntityStatus status = 5;
   EntityCapabilities requires_audio = 6;
   EntityCapabilities requires_video = 7;
