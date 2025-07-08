@@ -26,9 +26,6 @@ type OrchestratorService struct {
 	eventStreamsMu sync.RWMutex
 	eventStreams   map[string]chan *eventspb.Event
 
-	statusStreamsMu sync.RWMutex
-	statusStreams   map[string]chan *commonpb.StatusUpdate
-
 	metricsStreamsMu sync.RWMutex
 	metricsStreams   map[string]chan *commonpb.Metrics
 }
@@ -39,7 +36,6 @@ func NewOrchestratorService(registry *ModuleRegistry, manager *ModuleManager) *O
 		registry:       registry,
 		manager:        manager,
 		eventStreams:   make(map[string]chan *eventspb.Event),
-		statusStreams:  make(map[string]chan *commonpb.StatusUpdate),
 		metricsStreams: make(map[string]chan *commonpb.Metrics),
 	}
 }
@@ -206,44 +202,6 @@ func (s *OrchestratorService) SubscribeToEvents(
 	}
 }
 
-// SubscribeToStatusUpdates subscribes to module status updates
-func (s *OrchestratorService) SubscribeToStatusUpdates(
-	req *orchestratorpb.SubscribeToStatusRequest,
-	stream orchestratorpb.OrchestratorService_SubscribeToStatusUpdatesServer,
-) error {
-	// Create a channel for this subscription
-	statusChan := make(chan *commonpb.StatusUpdate, 100)
-	streamID := fmt.Sprintf("status_%p", stream)
-
-	s.statusStreamsMu.Lock()
-	s.statusStreams[streamID] = statusChan
-	s.statusStreamsMu.Unlock()
-
-	// Cleanup on exit
-	defer func() {
-		s.statusStreamsMu.Lock()
-		delete(s.statusStreams, streamID)
-		s.statusStreamsMu.Unlock()
-		close(statusChan)
-	}()
-
-	slog.Info("Client subscribed to status updates", "stream_id", streamID)
-
-	// Stream status updates until context is done
-	for {
-		select {
-		case <-stream.Context().Done():
-			slog.Info("Status stream closed", "stream_id", streamID)
-			return stream.Context().Err()
-		case status := <-statusChan:
-			if err := stream.Send(status); err != nil {
-				slog.Error("Failed to send status update", "error", err, "stream_id", streamID)
-				return err
-			}
-		}
-	}
-}
-
 // SubscribeToMetrics subscribes to module metrics
 func (s *OrchestratorService) SubscribeToMetrics(
 	req *orchestratorpb.SubscribeToMetricsRequest,
@@ -298,22 +256,6 @@ func (s *OrchestratorService) BroadcastEvent(event *eventspb.Event) {
 	}
 }
 
-// BroadcastStatusUpdate sends a status update to all subscribed status streams
-func (s *OrchestratorService) BroadcastStatusUpdate(status *commonpb.StatusUpdate) {
-	s.statusStreamsMu.RLock()
-	defer s.statusStreamsMu.RUnlock()
-
-	for streamID, statusChan := range s.statusStreams {
-		select {
-		case statusChan <- status:
-			// Status sent successfully
-		default:
-			// Channel is full, skip this stream
-			slog.Warn("Status stream buffer full, dropping update", "stream_id", streamID)
-		}
-	}
-}
-
 // BroadcastMetrics sends metrics to all subscribed metrics streams
 func (s *OrchestratorService) BroadcastMetrics(metrics *commonpb.Metrics) {
 	s.metricsStreamsMu.RLock()
@@ -358,7 +300,6 @@ func (s *OrchestratorService) ReportEvent(
 		Success: true,
 	}, nil
 }
-
 
 // ReportMetrics handles metrics reports from modules
 func (s *OrchestratorService) ReportMetrics(
