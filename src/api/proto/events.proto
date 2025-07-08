@@ -77,8 +77,6 @@ service EventService {
   // Modules call this to report events to the orchestrator
   rpc ReportEvent(ReportEventRequest) returns (ReportEventResponse);
   
-  // Modules call this to report status updates
-  rpc ReportStatus(ReportStatusRequest) returns (ReportStatusResponse);
   
   // Modules call this to report metrics
   rpc ReportMetrics(ReportMetricsRequest) returns (ReportMetricsResponse);
@@ -94,14 +92,6 @@ message ReportEventResponse {
   string error_message = 2;
 }
 
-message ReportStatusRequest {
-  call_assistant.common.StatusUpdate status_update = 1;
-}
-
-message ReportStatusResponse {
-  bool success = 1;
-  string error_message = 2;
-}
 
 message ReportMetricsRequest {
   call_assistant.common.Metrics metrics = 1;

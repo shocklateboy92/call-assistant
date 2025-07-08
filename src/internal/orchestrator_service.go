@@ -359,38 +359,6 @@ func (s *OrchestratorService) ReportEvent(
 	}, nil
 }
 
-// ReportStatus handles status update reports from modules
-func (s *OrchestratorService) ReportStatus(
-	ctx context.Context,
-	req *eventspb.ReportStatusRequest,
-) (*eventspb.ReportStatusResponse, error) {
-	if req.StatusUpdate == nil {
-		return &eventspb.ReportStatusResponse{
-			Success:      false,
-			ErrorMessage: "Status update is required",
-		}, nil
-	}
-
-	// Log the status update
-	slog.Info("Received status update from module",
-		"module_id", req.StatusUpdate.ModuleId,
-		"state", req.StatusUpdate.ModuleStatus.State,
-		"health", req.StatusUpdate.ModuleStatus.Health,
-	)
-
-	// Update the registry with the new status
-	if module, exists := s.registry.GetModule(req.StatusUpdate.ModuleId); exists {
-		module.Status = req.StatusUpdate.ModuleStatus.State
-		module.ErrorMsg = req.StatusUpdate.ModuleStatus.ErrorMessage
-	}
-
-	// Broadcast the status update to all subscribed streams
-	s.BroadcastStatusUpdate(req.StatusUpdate)
-
-	return &eventspb.ReportStatusResponse{
-		Success: true,
-	}, nil
-}
 
 // ReportMetrics handles metrics reports from modules
 func (s *OrchestratorService) ReportMetrics(
