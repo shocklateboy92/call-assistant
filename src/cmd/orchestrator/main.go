@@ -11,8 +11,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/shocklateboy92/call-assistant/src/internal"
 	commonpb "github.com/shocklateboy92/call-assistant/src/api/proto/common"
+	"github.com/shocklateboy92/call-assistant/src/internal"
 )
 
 func main() {
@@ -151,12 +151,10 @@ func runOrchestrator(ctx context.Context, modulesDir string, devMode bool, verbo
 
 	orchestratorService := internal.NewOrchestratorService(registry, manager)
 
-	// Start gRPC server in goroutine
-	go func() {
-		if err := orchestratorService.StartGRPCServer(ctx, orchestratorPort); err != nil {
-			slog.Error("gRPC server error", "error", err)
-		}
-	}()
+	// Start gRPC server in in main thread, it will listen in goroutine
+	if err := orchestratorService.StartGRPCServer(ctx, orchestratorPort); err != nil {
+		slog.Error("gRPC server error", "error", err)
+	}
 
 	// Phase 6: Status Monitoring
 	fmt.Println("\n📊 Phase 6: Status Monitoring")
