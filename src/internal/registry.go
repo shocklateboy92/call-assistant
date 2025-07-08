@@ -2,12 +2,12 @@ package internal
 
 import (
 	"fmt"
+	"maps"
 	"sort"
 	"sync"
 
 	commonpb "github.com/shocklateboy92/call-assistant/src/api/proto/common"
 )
-
 
 // RegisteredModule represents a module that has been registered with the orchestrator
 type RegisteredModule struct {
@@ -71,9 +71,7 @@ func (mr *ModuleRegistry) GetAllModules() map[string]*RegisteredModule {
 
 	// Create a copy to avoid concurrent access issues
 	result := make(map[string]*RegisteredModule)
-	for id, module := range mr.modules {
-		result[id] = module
-	}
+	maps.Copy(result, mr.modules)
 
 	return result
 }

@@ -24,11 +24,10 @@ import { Empty } from "call-assistant-protos/google/protobuf/empty";
 import {
   ListEntitiesRequest,
   ListEntitiesResponse,
-  Protocol,
 } from "call-assistant-protos/entities";
 import type { CallContext } from "nice-grpc-common";
 import { MatrixProtocol } from "./matrix-protocol";
-import { MatrixConfiguration, MatrixModuleConfig } from "./configuration";
+import { MatrixConfiguration } from "./configuration";
 import { eventDispatch } from "./event-dispatch";
 
 class MatrixModule
@@ -37,7 +36,8 @@ class MatrixModule
     ConfigurableModuleServiceImplementation
 {
   private configuration = new MatrixConfiguration();
-  private matrixProtocol?: MatrixProtocol;
+  // Store protocols by their unique ID
+  private protocols: Record<string, MatrixProtocol> = {};
 
   async healthCheck(
     request: HealthCheckRequest,
@@ -69,13 +69,13 @@ class MatrixModule
     const response: ShutdownResponse = {};
 
     // Clean up Matrix client
-    if (this.matrixProtocol) {
+    for (const protocol of Object.values(this.protocols)) {
       try {
-        this.matrixProtocol.shutdown();
+        protocol.shutdown();
         console.log("[Matrix Module] Matrix client stopped");
       } catch (error) {
         console.error("[Matrix Module] Error stopping Matrix client:", error);
-        response.error_message = `Failed to stop Matrix client: ${String(
+        response.error_message += `Error stopping Matrix client: ${String(
           error
         )}`;
         // Swallowing the error since we're shutting down anyway
@@ -91,7 +91,7 @@ class MatrixModule
     return response;
   }
 
-  async getConfigSchema(
+  getConfigSchema(
     _request: Empty,
     _context: CallContext
   ): Promise<GetConfigSchemaResponse> {
@@ -129,45 +129,18 @@ class MatrixModule
   ): Promise<ListEntitiesResponse> {
     console.log("[Matrix Module] ListEntities called");
 
-    try {
-      const protocols: Protocol[] = [];
-
-      // If we have a configured matrix protocol, include it
-      if (this.matrixProtocol) {
-        // Apply filters if specified
-        const passesTypeFilter =
-          !request.entity_type_filter ||
-          request.entity_type_filter === "protocol";
-        const passesStateFilter =
-          !request.state_filter ||
-          this.matrixProtocol.status?.state === request.state_filter;
-
-        if (passesTypeFilter && passesStateFilter) {
-          protocols.push(this.matrixProtocol);
-        }
-      }
-
-      return {
-        success: true,
-        error_message: "",
-        media_sources: [],
-        media_sinks: [],
-        protocols: protocols,
-        converters: [],
-      };
-    } catch (error) {
-      console.error("[Matrix Module] Error listing entities:", error);
-      return {
-        success: false,
-        error_message: `Failed to list entities: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-        media_sources: [],
-        media_sinks: [],
-        protocols: [],
-        converters: [],
-      };
-    }
+    return {
+      success: true,
+      error_message: "",
+      media_sources: [],
+      media_sinks: [],
+      protocols: Object.values(this.protocols).filter(
+        (p) =>
+          request.state_filter === undefined ||
+          p.status?.state === request.state_filter
+      ),
+      converters: [],
+    };
   }
 
   private initializeMatrixProtocol() {
@@ -183,17 +156,9 @@ class MatrixModule
       `[Matrix Module] Initializing Matrix client for ${config.userId}`
     );
 
-    // Stop existing protocol if present
-    if (this.matrixProtocol) {
-      try {
-        this.matrixProtocol.shutdown();
-      } catch (error) {
-        console.warn("[Matrix Module] Error stopping previous client:", error);
-      }
-    }
-
     // Create the protocol wrapper
-    this.matrixProtocol = new MatrixProtocol(config);
+    const protocol = new MatrixProtocol(config);
+    this.protocols[protocol.id] = protocol;
 
     console.log("[Matrix Module] Matrix client initialized successfully");
   }
