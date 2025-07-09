@@ -15,6 +15,7 @@ import (
 
 	commonpb "github.com/shocklateboy92/call-assistant/src/api/proto/common"
 	entitiespb "github.com/shocklateboy92/call-assistant/src/api/proto/entities"
+	eventspb "github.com/shocklateboy92/call-assistant/src/api/proto/events"
 	modulepb "github.com/shocklateboy92/call-assistant/src/api/proto/module"
 	orchestratorpb "github.com/shocklateboy92/call-assistant/src/api/proto/orchestrator"
 	configpb "github.com/shocklateboy92/call-assistant/src/generated/go/services"
@@ -267,7 +268,17 @@ func TestOrchestratorService() error {
 		fmt.Printf("✅ Matrix module correctly rejected invalid credentials: %v\n", err)
 	} else {
 		fmt.Println("❌ Matrix module should have rejected invalid credentials")
+		return fmt.Errorf("matrix module accepted invalid credentials")
 	}
+
+	// Start event subscription before configuring the module
+	fmt.Println("  Starting event subscription...")
+	eventChan, cleanup, err := startEventSubscription(client, "matrix")
+	if err != nil {
+		slog.Error("Failed to start event subscription", "error", err)
+		return fmt.Errorf("failed to start event subscription: %w", err)
+	}
+	defer cleanup()
 
 	// Now test with correct Alice credentials
 	fmt.Printf("  Testing with valid %s credentials...\n", Users[0])
@@ -280,24 +291,44 @@ func TestOrchestratorService() error {
 	err = configureModule(matrixModule.GrpcAddress, "matrix", aliceConfig)
 	if err != nil {
 		slog.Error("Failed to configure matrix module with valid credentials", "error", err)
+		return fmt.Errorf("failed to configure matrix module: %w", err)
 	} else {
 		fmt.Printf("✅ Matrix module configured successfully with %s credentials\n", Users[0])
 
-		// Wait for entities to be created asynchronously
-		fmt.Println("  Waiting for entities to be created...")
-		err = waitForEntitiesUpdated(client, "matrix")
+		// Wait for all 3 entity updates to complete (entity creation -> active -> contacts populated)
+		fmt.Println("  Waiting for all entity updates to complete...")
+		err = waitForEntityUpdatesFromChannel(eventChan, 3)
 		if err != nil {
-			slog.Error("Failed to wait for entities to be created", "error", err)
+			slog.Error("Failed to wait for all entity updates", "error", err)
+			return fmt.Errorf("failed to wait for entity updates: %w", err)
 		} else {
-			fmt.Println("✅ Entities created successfully")
+			fmt.Println("✅ All entity updates received (3/3)")
 
 			// Test GetCallingProtocols after entities are created
 			fmt.Println("  Testing GetCallingProtocols...")
 			err = testGetCallingProtocols(matrixModule.GrpcAddress)
 			if err != nil {
 				slog.Error("Failed to test GetCallingProtocols", "error", err)
+				return fmt.Errorf("failed to test GetCallingProtocols: %w", err)
 			} else {
 				fmt.Println("✅ GetCallingProtocols test passed")
+			}
+
+			// Check final entity state (should be ENTITY_STATE_ACTIVE)
+			fmt.Println("  Checking final entity state...")
+			err = testEntityState(matrixModule.GrpcAddress, entitiespb.EntityState_ENTITY_STATE_ACTIVE, 3)
+			if err != nil {
+				slog.Error("Failed to check final entity state", "error", err)
+			}
+
+			// Check that contacts have been populated
+			fmt.Println("  Checking that contacts are populated...")
+			err = testContactsPopulated(matrixModule.GrpcAddress)
+			if err != nil {
+				slog.Error("Failed to verify contacts are populated", "error", err)
+				return fmt.Errorf("failed to verify contacts are populated: %w", err)
+			} else {
+				fmt.Println("✅ Contacts populated successfully")
 			}
 		}
 	}
@@ -312,6 +343,7 @@ func TestOrchestratorService() error {
 	eventStream, err := client.SubscribeToEvents(ctx, &orchestratorpb.SubscribeToEventsRequest{})
 	if err != nil {
 		slog.Error("Failed to subscribe to events", "error", err)
+		return fmt.Errorf("failed to subscribe to events: %w", err)
 	} else {
 		eventCount := 0
 		for {
@@ -460,6 +492,102 @@ func testGetCallingProtocols(grpcAddress string) error {
 	return nil
 }
 
+func testEntityState(grpcAddress string, expectedState entitiespb.EntityState, updateNumber int) error {
+	// Connect to the module directly
+	conn, err := grpc.NewClient(
+		grpcAddress,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to connect to matrix module: %w", err)
+	}
+	defer conn.Close()
+
+	client := modulepb.NewModuleServiceClient(conn)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// List all entities
+	listResp, err := client.ListEntities(ctx, &entitiespb.ListEntitiesRequest{
+		EntityTypeFilter: "protocol",
+	})
+	if err != nil {
+		return fmt.Errorf("failed to list entities: %w", err)
+	}
+
+	if !listResp.Success {
+		return fmt.Errorf("ListEntities failed: %s", listResp.ErrorMessage)
+	}
+
+	fmt.Printf("    After update %d, found %d protocol(s):\n", updateNumber, len(listResp.Protocols))
+	for i, protocol := range listResp.Protocols {
+		fmt.Printf("      %d. %s (%s) - State: %s\n", i+1, protocol.Name, protocol.Id, protocol.Status.State.String())
+
+		// Check if the entity is in the expected state
+		if protocol.Status.State == expectedState {
+			fmt.Printf("         ✅ Entity is in expected state: %s\n", expectedState.String())
+		} else {
+			fmt.Printf("         ⚠️  Entity is in state %s, expected %s\n", protocol.Status.State.String(), expectedState.String())
+		}
+	}
+
+	return nil
+}
+
+func testContactsPopulated(grpcAddress string) error {
+	// Connect to the module directly
+	conn, err := grpc.NewClient(
+		grpcAddress,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to connect to matrix module: %w", err)
+	}
+	defer conn.Close()
+
+	client := modulepb.NewModuleServiceClient(conn)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// List all entities to get protocol entities
+	listResp, err := client.ListEntities(ctx, &entitiespb.ListEntitiesRequest{
+		EntityTypeFilter: "protocol",
+	})
+	if err != nil {
+		return fmt.Errorf("failed to list entities: %w", err)
+	}
+
+	if !listResp.Success {
+		return fmt.Errorf("ListEntities failed: %s", listResp.ErrorMessage)
+	}
+
+	fmt.Printf("    Found %d protocol(s) to check for contacts:\n", len(listResp.Protocols))
+
+	foundTestCall1 := false
+	for i, protocol := range listResp.Protocols {
+		fmt.Printf("      %d. %s (%s)\n", i+1, protocol.Name, protocol.Id)
+		fmt.Printf("         Type: %s\n", protocol.Type)
+		fmt.Printf("         State: %s\n", protocol.Status.State.String())
+		fmt.Printf("         Contacts: %d\n", len(protocol.Contacts))
+
+		// Check each contact for "test call 1"
+		for j, contact := range protocol.Contacts {
+			fmt.Printf("           %d. %s (%s)\n", j+1, contact.DisplayName, contact.Address)
+			if contact.DisplayName == "test call 1" {
+				foundTestCall1 = true
+				fmt.Printf("           ✅ Found 'test call 1' contact!\n")
+			}
+		}
+		fmt.Println()
+	}
+
+	if !foundTestCall1 {
+		return fmt.Errorf("contact 'test call 1' not found in any protocol entity")
+	}
+
+	return nil
+}
+
 // waitForModulesToStart waits for both expected modules to report module_started events
 func waitForModulesToStart() error {
 	// Give orchestrator a moment to start up
@@ -538,32 +666,94 @@ func waitForModulesToStart() error {
 	}
 }
 
-// waitForEntitiesUpdated waits for an EntitiesUpdatedEvent from the specified module
-func waitForEntitiesUpdated(client orchestratorpb.OrchestratorServiceClient, moduleId string) error {
-	// Create context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+// startEventSubscription starts a single event subscription and returns a channel of events
+func startEventSubscription(
+	client orchestratorpb.OrchestratorServiceClient,
+	moduleId string,
+) (_eventChan <-chan *eventspb.Event, _cleanup func(), _err error) {
+	// Create context for the subscription (longer timeout since this stays active)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 
 	// Subscribe to events
 	stream, err := client.SubscribeToEvents(ctx, &orchestratorpb.SubscribeToEventsRequest{
 		FilterModuleIds: []string{moduleId},
 	})
 	if err != nil {
-		return fmt.Errorf("failed to subscribe to events: %w", err)
+		cancel()
+		return nil, nil, fmt.Errorf("failed to subscribe to events: %w", err)
 	}
 
-	fmt.Printf("  Waiting for entities_updated event from module: %s\n", moduleId)
+	// Create a buffered channel to store events
+	eventChan := make(chan *eventspb.Event, 10) // Buffer 10 events to prevent loss
+
+	// Start goroutine to read events from stream and send to channel
+	go func() {
+		defer close(eventChan)
+		for {
+			event, err := stream.Recv()
+			if err != nil {
+				if ctx.Err() != nil {
+					// Context cancelled/timeout, expected
+					return
+				}
+				slog.Error("Error receiving event in subscription", "error", err)
+				return
+			}
+
+			// Send event to channel (non-blocking due to buffer)
+			select {
+			case eventChan <- event:
+				// Event sent successfully
+			case <-ctx.Done():
+				// Context cancelled
+				return
+			default:
+				// Channel is full, log warning but continue
+				slog.Warn("Event channel buffer is full, events may be lost")
+			}
+		}
+	}()
+
+	// Return channel and cleanup function
+	cleanup := func() {
+		cancel()
+	}
+
+	return eventChan, cleanup, nil
+}
+
+// waitForEntityUpdatesFromChannel waits for entity updates from the event channel
+func waitForEntityUpdatesFromChannel(eventChan <-chan *eventspb.Event, expectedCount int) error {
+	fmt.Printf("  Waiting for %d entities_updated events from channel\n", expectedCount)
+
+	receivedCount := 0
+	timeout := time.NewTimer(15 * time.Second)
+	defer timeout.Stop()
 
 	for {
-		event, err := stream.Recv()
-		if err != nil {
-			return fmt.Errorf("failed to receive event: %w", err)
-		}
+		select {
+		case event, ok := <-eventChan:
+			if !ok {
+				return fmt.Errorf("event channel closed before receiving all events")
+			}
 
-		// Check if this is an entities_updated event
-		if entitiesUpdatedEvent := event.GetEntitiesUpdated(); entitiesUpdatedEvent != nil {
-			fmt.Printf("  ✅ Received entities_updated event from: %s\n", event.SourceModuleId)
-			return nil
+			// Check if this is an entities_updated event
+			if entitiesUpdatedEvent := event.GetEntitiesUpdated(); entitiesUpdatedEvent != nil {
+				receivedCount++
+				fmt.Printf(
+					"  ✅ Received entities_updated event %d/%d from: %s\n",
+					receivedCount,
+					expectedCount,
+					event.SourceModuleId,
+				)
+
+				if receivedCount >= expectedCount {
+					return nil
+				}
+			}
+
+		case <-timeout.C:
+			return fmt.Errorf("timeout waiting for entity updates, received %d/%d", receivedCount, expectedCount)
 		}
 	}
 }
