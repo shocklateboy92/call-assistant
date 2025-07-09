@@ -292,45 +292,49 @@ func TestOrchestratorService() error {
 	if err != nil {
 		slog.Error("Failed to configure matrix module with valid credentials", "error", err)
 		return fmt.Errorf("failed to configure matrix module: %w", err)
+	}
+	fmt.Printf("✅ Matrix module configured successfully with %s credentials\n", Users[0])
+
+	// Wait for all expected entity updates to complete (protocol creation -> active -> contacts populated)
+	err = waitForEntityUpdatesFromChannel(eventChan, 0) // Count parameter is now unused
+	if err != nil {
+		slog.Error("Failed to wait for all entity updates", "error", err)
+		return fmt.Errorf("failed to wait for entity updates: %w", err)
+	}
+
+	// Validate the final state of the matrix module
+	fmt.Println("  Validating matrix module final state...")
+	err = validateMatrixModuleState(matrixModule.GrpcAddress)
+	if err != nil {
+		slog.Error("Matrix module state validation failed", "error", err)
+		return fmt.Errorf("matrix module state validation failed: %w", err)
+	}
+
+	// Test GetCallingProtocols after entities are created
+	fmt.Println("  Testing GetCallingProtocols...")
+	err = testGetCallingProtocols(matrixModule.GrpcAddress)
+	if err != nil {
+		slog.Error("Failed to test GetCallingProtocols", "error", err)
+		return fmt.Errorf("failed to test GetCallingProtocols: %w", err)
 	} else {
-		fmt.Printf("✅ Matrix module configured successfully with %s credentials\n", Users[0])
+		fmt.Println("✅ GetCallingProtocols test passed")
+	}
 
-		// Wait for all 3 entity updates to complete (entity creation -> active -> contacts populated)
-		fmt.Println("  Waiting for all entity updates to complete...")
-		err = waitForEntityUpdatesFromChannel(eventChan, 3)
-		if err != nil {
-			slog.Error("Failed to wait for all entity updates", "error", err)
-			return fmt.Errorf("failed to wait for entity updates: %w", err)
-		} else {
-			fmt.Println("✅ All entity updates received (3/3)")
+	// Check final entity state (should be ENTITY_STATE_ACTIVE)
+	fmt.Println("  Checking final entity state...")
+	err = testEntityState(matrixModule.GrpcAddress, entitiespb.EntityState_ENTITY_STATE_ACTIVE, 3)
+	if err != nil {
+		slog.Error("Failed to check final entity state", "error", err)
+	}
 
-			// Test GetCallingProtocols after entities are created
-			fmt.Println("  Testing GetCallingProtocols...")
-			err = testGetCallingProtocols(matrixModule.GrpcAddress)
-			if err != nil {
-				slog.Error("Failed to test GetCallingProtocols", "error", err)
-				return fmt.Errorf("failed to test GetCallingProtocols: %w", err)
-			} else {
-				fmt.Println("✅ GetCallingProtocols test passed")
-			}
-
-			// Check final entity state (should be ENTITY_STATE_ACTIVE)
-			fmt.Println("  Checking final entity state...")
-			err = testEntityState(matrixModule.GrpcAddress, entitiespb.EntityState_ENTITY_STATE_ACTIVE, 3)
-			if err != nil {
-				slog.Error("Failed to check final entity state", "error", err)
-			}
-
-			// Check that contacts have been populated
-			fmt.Println("  Checking that contacts are populated...")
-			err = testContactsPopulated(matrixModule.GrpcAddress)
-			if err != nil {
-				slog.Error("Failed to verify contacts are populated", "error", err)
-				return fmt.Errorf("failed to verify contacts are populated: %w", err)
-			} else {
-				fmt.Println("✅ Contacts populated successfully")
-			}
-		}
+	// Check that contacts have been populated
+	fmt.Println("  Checking that contacts are populated...")
+	err = testContactsPopulated(matrixModule.GrpcAddress)
+	if err != nil {
+		slog.Error("Failed to verify contacts are populated", "error", err)
+		return fmt.Errorf("failed to verify contacts are populated: %w", err)
+	} else {
+		fmt.Println("✅ Contacts populated successfully")
 	}
 
 	// Step 7: Subscribe to events for a few seconds
@@ -722,38 +726,190 @@ func startEventSubscription(
 	return eventChan, cleanup, nil
 }
 
-// waitForEntityUpdatesFromChannel waits for entity updates from the event channel
+// waitForEntityUpdatesFromChannel waits for specific entity update events from the event channel
 func waitForEntityUpdatesFromChannel(eventChan <-chan *eventspb.Event, expectedCount int) error {
-	fmt.Printf("  Waiting for %d entities_updated events from channel\n", expectedCount)
+	fmt.Printf("  Waiting for matrix module entity updates to complete...\n")
 
-	receivedCount := 0
-	timeout := time.NewTimer(15 * time.Second)
+	// Define the expected event reasons in order of typical occurrence
+	expectedReasons := []string{
+		"protocol created",
+		"status updated to ENTITY_STATE_ACTIVE",
+		"rooms changed",
+	}
+
+	receivedReasons := make(map[string]bool)
+	timeout := time.NewTimer(20 * time.Second) // Increased timeout for Matrix sync
 	defer timeout.Stop()
 
 	for {
 		select {
 		case event, ok := <-eventChan:
 			if !ok {
-				return fmt.Errorf("event channel closed before receiving all events")
+				return fmt.Errorf("event channel closed before receiving all expected events")
 			}
 
 			// Check if this is an entities_updated event
 			if entitiesUpdatedEvent := event.GetEntitiesUpdated(); entitiesUpdatedEvent != nil {
-				receivedCount++
-				fmt.Printf(
-					"  ✅ Received entities_updated event %d/%d from: %s\n",
-					receivedCount,
-					expectedCount,
-					event.SourceModuleId,
-				)
+				reason := entitiesUpdatedEvent.Reason
+				if reason != nil {
+					fmt.Printf(
+						"  📧 Received entities_updated event: '%s' from: %s\n",
+						*reason,
+						event.SourceModuleId,
+					)
 
-				if receivedCount >= expectedCount {
-					return nil
+					// Mark this reason as received
+					receivedReasons[*reason] = true
+
+					// Check if we have all expected reasons
+					allReceived := true
+					for _, expectedReason := range expectedReasons {
+						if !receivedReasons[expectedReason] {
+							allReceived = false
+							break
+						}
+					}
+
+					if allReceived {
+						fmt.Printf("  ✅ All expected entity update events received\n")
+						return nil
+					}
 				}
 			}
 
 		case <-timeout.C:
-			return fmt.Errorf("timeout waiting for entity updates, received %d/%d", receivedCount, expectedCount)
+			// Build error message showing what was received vs expected
+			var missing []string
+			for _, expectedReason := range expectedReasons {
+				if !receivedReasons[expectedReason] {
+					missing = append(missing, expectedReason)
+				}
+			}
+
+			var received []string
+			for reason := range receivedReasons {
+				received = append(received, reason)
+			}
+
+			return fmt.Errorf("timeout waiting for entity updates.\nExpected: %v\nReceived: %v\nMissing: %v",
+				expectedReasons, received, missing)
 		}
 	}
+}
+
+// validateMatrixModuleState validates that the matrix module is in the expected final state
+func validateMatrixModuleState(grpcAddress string) error {
+	// Connect to the module directly
+	conn, err := grpc.NewClient(
+		grpcAddress,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to connect to matrix module: %w", err)
+	}
+	defer conn.Close()
+
+	client := modulepb.NewModuleServiceClient(conn)
+
+	// Use retry logic to handle timing issues
+	maxRetries := 5
+	retryDelay := 1 * time.Second
+
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+
+		// Check module health
+		healthResp, err := client.HealthCheck(ctx, &modulepb.HealthCheckRequest{})
+		if err != nil {
+			cancel()
+			if attempt == maxRetries {
+				return fmt.Errorf("failed to check module health: %w", err)
+			}
+			fmt.Printf("    Health check attempt %d failed, retrying...\n", attempt)
+			time.Sleep(retryDelay)
+			continue
+		}
+
+		if healthResp.Status.Health != commonpb.HealthStatus_HEALTH_STATUS_HEALTHY {
+			cancel()
+			if attempt == maxRetries {
+				return fmt.Errorf("module is not healthy: %s", healthResp.Status.Health.String())
+			}
+			fmt.Printf("    Module not healthy on attempt %d, retrying...\n", attempt)
+			time.Sleep(retryDelay)
+			continue
+		}
+
+		if healthResp.Status.State != commonpb.ModuleState_MODULE_STATE_READY {
+			cancel()
+			if attempt == maxRetries {
+				return fmt.Errorf("module is not ready: %s", healthResp.Status.State.String())
+			}
+			fmt.Printf("    Module not ready on attempt %d, retrying...\n", attempt)
+			time.Sleep(retryDelay)
+			continue
+		}
+
+		// List entities to verify protocol state
+		listResp, err := client.ListEntities(ctx, &entitiespb.ListEntitiesRequest{
+			EntityTypeFilter: "protocol",
+		})
+		cancel()
+
+		if err != nil {
+			if attempt == maxRetries {
+				return fmt.Errorf("failed to list entities: %w", err)
+			}
+			fmt.Printf("    List entities attempt %d failed, retrying...\n", attempt)
+			time.Sleep(retryDelay)
+			continue
+		}
+
+		if !listResp.Success {
+			if attempt == maxRetries {
+				return fmt.Errorf("ListEntities failed: %s", listResp.ErrorMessage)
+			}
+			fmt.Printf("    ListEntities failed on attempt %d, retrying...\n", attempt)
+			time.Sleep(retryDelay)
+			continue
+		}
+
+		// Verify we have at least one protocol
+		if len(listResp.Protocols) == 0 {
+			if attempt == maxRetries {
+				return fmt.Errorf("no protocol entities found")
+			}
+			fmt.Printf("    No protocols found on attempt %d, retrying...\n", attempt)
+			time.Sleep(retryDelay)
+			continue
+		}
+
+		// Verify protocol is in active state
+		protocolActive := false
+		for _, protocol := range listResp.Protocols {
+			if protocol.Status.State == entitiespb.EntityState_ENTITY_STATE_ACTIVE {
+				protocolActive = true
+				break
+			}
+		}
+
+		if !protocolActive {
+			if attempt == maxRetries {
+				return fmt.Errorf("no protocol entities are in ACTIVE state")
+			}
+			fmt.Printf("    No active protocols found on attempt %d, retrying...\n", attempt)
+			time.Sleep(retryDelay)
+			continue
+		}
+
+		// If we get here, all validations passed
+		fmt.Printf("    ✅ Matrix module state validation passed on attempt %d\n", attempt)
+		fmt.Printf("    Module: %s, Health: %s, Protocols: %d\n",
+			healthResp.Status.State.String(),
+			healthResp.Status.Health.String(),
+			len(listResp.Protocols))
+		return nil
+	}
+
+	return fmt.Errorf("validation failed after %d attempts", maxRetries)
 }
