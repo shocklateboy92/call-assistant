@@ -131,6 +131,8 @@ export class MatrixProtocol implements Protocol {
         })
     );
 
+    console.log(`Created contacts: ${Object.keys(this._contacts).length}`);
+
     // Now let the orchestrator know about the contacts
     await this.dispatchEntityUpdate("rooms changed");
   }

@@ -135,9 +135,7 @@ class MatrixModule
       media_sources: [],
       media_sinks: [],
       protocols: Object.values(this.protocols).filter(
-        (p) =>
-          request.state_filter === undefined ||
-          p.status?.state === request.state_filter
+        (p) => !request.state_filter || p.status?.state === request.state_filter
       ),
       converters: [],
     };
@@ -152,9 +150,7 @@ class MatrixModule
       return;
     }
 
-    console.log(
-      `Initializing Matrix client for ${config.userId}`
-    );
+    console.log(`Initializing Matrix client for ${config.userId}`);
 
     // Create the protocol wrapper
     const protocol = new MatrixProtocol(config);
