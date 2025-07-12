@@ -13,13 +13,6 @@
 - `HealthCheck()` - Status reporting
 - `Shutdown()` - Graceful shutdown
 
-### EntityService (each module)  
-- `CreateEntity()` - Create entity instances
-- `ConfigureEntity()` - Update configuration
-- `GetEntityStatus()` - Query state
-- `DestroyEntity()` - Cleanup resources
-- `ListEntities()` - List active entities
-
 ### PipelineService (each module)
 - `ConnectEntities()` - Establish connections  
 - `StartFlow()` - Begin media flow

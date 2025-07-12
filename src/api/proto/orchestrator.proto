@@ -5,6 +5,7 @@ package call_assistant.orchestrator;
 option go_package = "github.com/shocklateboy92/call-assistant/src/api/proto/orchestrator";
 
 import "common.proto";
+import "entities.proto";
 import "events.proto";
 import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
@@ -23,6 +24,17 @@ service OrchestratorService {
   rpc SubscribeToEvents(SubscribeToEventsRequest) returns (stream call_assistant.events.Event);
   rpc SubscribeToStatusUpdates(SubscribeToStatusRequest) returns (stream call_assistant.common.StatusUpdate);
   rpc SubscribeToMetrics(SubscribeToMetricsRequest) returns (stream call_assistant.common.Metrics);
+}
+
+// PipelineService manages pipeline flows and connections
+service PipelineService {
+  // Flow management
+  rpc CreateFlow(CreateFlowRequest) returns (CreateFlowResponse);
+  rpc StartFlow(StartFlowRequest) returns (StartFlowResponse);
+  rpc StopFlow(StopFlowRequest) returns (StopFlowResponse);
+  rpc GetFlowStatus(GetFlowStatusRequest) returns (GetFlowStatusResponse);
+  rpc ListFlows(google.protobuf.Empty) returns (ListFlowsResponse);
+  rpc DestroyFlow(DestroyFlowRequest) returns (DestroyFlowResponse);
 }
 
 // Module management messages
@@ -102,4 +114,52 @@ message ModuleProcess {
   map<string, string> environment = 6;
   google.protobuf.Timestamp started_at = 7;
   call_assistant.common.ModuleState state = 8;
+}
+
+// Pipeline service messages
+message CreateFlowRequest {
+  string name = 1;
+  repeated call_assistant.entities.Connection connections = 2;
+}
+
+message CreateFlowResponse {
+  optional string error_message = 1;
+  call_assistant.entities.Flow flow = 2;
+}
+
+message StartFlowRequest {
+  string flow_id = 1;
+}
+
+message StartFlowResponse {
+  optional string error_message = 1;
+}
+
+message StopFlowRequest {
+  string flow_id = 1;
+}
+
+message StopFlowResponse {
+  optional string error_message = 1;
+}
+
+message GetFlowStatusRequest {
+  string flow_id = 1;
+}
+
+message GetFlowStatusResponse {
+  optional string error_message = 1;
+  call_assistant.entities.FlowStatus status = 2;
+}
+
+message ListFlowsResponse {
+  repeated call_assistant.entities.Flow flows = 1;
+}
+
+message DestroyFlowRequest {
+  string flow_id = 1;
+}
+
+message DestroyFlowResponse {
+  optional string error_message = 1;
 }

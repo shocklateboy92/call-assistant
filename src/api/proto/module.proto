@@ -11,12 +11,21 @@ import "entities.proto";
 service ModuleService {
   // HealthCheck is called periodically by the orchestrator to monitor module health
   rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
-  
+
   // Shutdown is called to gracefully stop the module
   rpc Shutdown(ShutdownRequest) returns (ShutdownResponse);
-  
+
   // ListEntities enumerates active entities
   rpc ListEntities(call_assistant.entities.ListEntitiesRequest) returns (call_assistant.entities.ListEntitiesResponse);
+
+  // ConfigureEntityOutput configures an entity to send data to a target
+  rpc ConfigureEntityOutput(ConfigureEntityOutputRequest) returns (ConfigureEntityOutputResponse);
+
+  // ConfigureEntityInput configures an entity to receive data from a source
+  rpc ConfigureEntityInput(ConfigureEntityInputRequest) returns (ConfigureEntityInputResponse);
+
+  // DisconnectEntity removes a connection from an entity
+  rpc DisconnectEntity(DisconnectEntityRequest) returns (DisconnectEntityResponse);
 }
 
 
@@ -49,6 +58,41 @@ message ShutdownRequest {
 message ShutdownResponse {
   // If error_message is not set, shutdown was successful
   optional string error_message = 2;
+}
+
+// Entity connection messages
+message ConfigureEntityOutputRequest {
+  string entity_id = 1;                    // Entity to configure for output
+  string target_address = 2;               // Target address (IP:port, URL, etc.)
+  string transport_protocol = 3;           // Transport protocol (rtsp, webrtc, hls, etc.)
+  call_assistant.entities.MediaFormat format = 4;  // Required media format
+  string connection_id = 5;                // Unique connection identifier
+}
+
+message ConfigureEntityOutputResponse {
+  optional string error_message = 1;
+}
+
+message ConfigureEntityInputRequest {
+  string entity_id = 1;                    // Entity to configure for input
+  string source_address = 2;               // Source address to listen on (IP:port, URL, etc.)
+  string transport_protocol = 3;           // Transport protocol (rtsp, webrtc, hls, etc.)
+  call_assistant.entities.MediaFormat expected_format = 4;  // Expected media format
+  string connection_id = 5;                // Unique connection identifier
+}
+
+message ConfigureEntityInputResponse {
+  optional string error_message = 1;
+  string actual_address = 2;               // Actual address bound to (if different from requested)
+}
+
+message DisconnectEntityRequest {
+  string entity_id = 1;                    // Entity to remove connection from
+  string connection_id = 2;                // Connection identifier to remove
+}
+
+message DisconnectEntityResponse {
+  optional string error_message = 1;
 }
 
 
